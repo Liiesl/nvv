@@ -1,18 +1,16 @@
 <script lang="ts">
 	import { ide } from "#lib/ide/ide.svelte.js";
 	import Icon from "#lib/components/Icon.svelte";
+	import MenuShell from "./MenuShell.svelte";
 </script>
 
 {#if ide.editorCtx}
-	<button
-		class="veil"
-		aria-label="Close editor menu"
-		onclick={() => (ide.editorCtx = null)}
-		onkeydown={(e) => {
-			if (e.key === "Escape") ide.editorCtx = null;
-		}}
-	></button>
-	<div class="ctx" role="menu" style={`left:${ide.editorCtx.x}px;top:${ide.editorCtx.y}px`}>
+	<MenuShell
+		x={ide.editorCtx.x}
+		y={ide.editorCtx.y}
+		label="Close editor menu"
+		onClose={() => (ide.editorCtx = null)}
+	>
 		<button
 			onclick={() => {
 				document.execCommand?.("cut");
@@ -60,5 +58,5 @@
 				ide.toast("Preview refreshed");
 			}}><Icon name="play" size={14} /><span>Run Preview</span><small>F5</small></button
 		>
-	</div>
+	</MenuShell>
 {/if}

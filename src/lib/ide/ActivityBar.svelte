@@ -1,6 +1,36 @@
 <script lang="ts">
 	import Icon from "#lib/components/Icon.svelte";
 	import { ide } from "#lib/ide/ide.svelte.js";
+	import { menuKeys, watchOutside } from "#lib/ide/menus/menu.js";
+
+	let accountsBtnEl: HTMLElement | null = $state(null);
+	let accountsMenuEl: HTMLElement | null = $state(null);
+	let settingsBtnEl: HTMLElement | null = $state(null);
+	let settingsMenuEl: HTMLElement | null = $state(null);
+
+	function toggleExclusive(which: "accounts" | "settings") {
+		const cur = which === "accounts" ? ide.accountsMenu : ide.settingsMenu;
+		ide.closeAllMenus();
+		if (!cur) {
+			if (which === "accounts") ide.accountsMenu = true;
+			else ide.settingsMenu = true;
+		}
+	}
+
+	$effect(() => {
+		if (!ide.accountsMenu) return;
+		return watchOutside(
+			() => [accountsMenuEl, accountsBtnEl],
+			() => ide.closeAllMenus(),
+		);
+	});
+	$effect(() => {
+		if (!ide.settingsMenu) return;
+		return watchOutside(
+			() => [settingsMenuEl, settingsBtnEl],
+			() => ide.closeAllMenus(),
+		);
+	});
 </script>
 
 <div class="activity">
@@ -66,15 +96,20 @@
 		<button
 			title="Accounts"
 			aria-label="Accounts"
-			onclick={() => {
-				ide.accountsMenu = !ide.accountsMenu;
-				ide.settingsMenu = false;
-			}}><Icon name="account" size={22} /></button
+			aria-haspopup="menu"
+			aria-expanded={ide.accountsMenu}
+			bind:this={accountsBtnEl}
+			onclick={() => toggleExclusive("accounts")}><Icon name="account" size={22} /></button
 		>
 		{#if ide.accountsMenu}
-			<button class="veil" aria-label="Close accounts" onclick={() => (ide.accountsMenu = false)}
-			></button>
-			<div class="actmenu" role="menu">
+			<div
+				class="actmenu"
+				role="menu"
+				tabindex="-1"
+				bind:this={accountsMenuEl}
+				onkeydown={(e) => menuKeys(e, e.currentTarget as HTMLElement, () => ide.closeAllMenus())}
+				oncontextmenu={(e) => e.preventDefault()}
+			>
 				<div class="projmenu-head">Accounts</div>
 				<div class="actuser">
 					<Icon name="account" size={28} /><span
@@ -85,7 +120,7 @@
 				<button
 					onclick={() => {
 						ide.toast("No other accounts");
-						ide.accountsMenu = false;
+						ide.closeAllMenus();
 					}}><span>Manage trusted extensions</span></button
 				>
 			</div>
@@ -96,49 +131,54 @@
 			class:on={ide.sideView === "settings"}
 			title="Manage"
 			aria-label="Manage"
-			onclick={() => {
-				ide.settingsMenu = !ide.settingsMenu;
-				ide.accountsMenu = false;
-			}}
+			aria-haspopup="menu"
+			aria-expanded={ide.settingsMenu}
+			bind:this={settingsBtnEl}
+			onclick={() => toggleExclusive("settings")}
 			><Icon name="settings-gear" size={22} />
 			{#if ide.warnCount > 0}<span class="badge">{ide.warnCount}</span>{/if}</button
 		>
 		{#if ide.settingsMenu}
-			<button class="veil" aria-label="Close manage" onclick={() => (ide.settingsMenu = false)}
-			></button>
-			<div class="actmenu" role="menu">
+			<div
+				class="actmenu"
+				role="menu"
+				tabindex="-1"
+				bind:this={settingsMenuEl}
+				onkeydown={(e) => menuKeys(e, e.currentTarget as HTMLElement, () => ide.closeAllMenus())}
+				oncontextmenu={(e) => e.preventDefault()}
+			>
 				<div class="projmenu-head">Manage</div>
 				<button
 					onclick={() => {
 						ide.sideView = "settings";
 						ide.sidebar = true;
-						ide.settingsMenu = false;
+						ide.closeAllMenus();
 					}}><span>Settings</span><small>Ctrl+,</small></button
 				>
 				<button
 					onclick={() => {
 						ide.paletteQ = "> ";
 						ide.palette = true;
-						ide.settingsMenu = false;
+						ide.closeAllMenus();
 					}}><span>Command Palette…</span><small>F1</small></button
 				>
 				<button
 					onclick={() => {
 						ide.toast("Color Theme: Dark Modern (default)");
-						ide.settingsMenu = false;
+						ide.closeAllMenus();
 					}}><span>Color Theme</span><small>Ctrl+K T</small></button
 				>
 				<button
 					onclick={() => {
 						ide.toast("Keyboard Shortcuts — F1 then type");
-						ide.settingsMenu = false;
+						ide.closeAllMenus();
 					}}><span>Keyboard Shortcuts</span><small>Ctrl+K S</small></button
 				>
 				<div class="sep"></div>
 				<button
 					onclick={() => {
 						ide.toast("Neverview v2 — Monaco + virtual FS");
-						ide.settingsMenu = false;
+						ide.closeAllMenus();
 					}}><span>About</span></button
 				>
 			</div>
@@ -147,7 +187,9 @@
 	<button
 		title="Notifications"
 		aria-label="Notifications"
-		onclick={() => (ide.notifCenter = !ide.notifCenter)}
+		aria-haspopup="dialog"
+		aria-expanded={ide.notifCenter}
+		onclick={() => ide.openOnly(() => (ide.notifCenter = true))}
 		><Icon name="bell" size={22} />
 		{#if ide.warnCount > 0}<span class="badge">{ide.warnCount}</span>{/if}
 	</button>

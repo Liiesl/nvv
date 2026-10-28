@@ -1,21 +1,15 @@
 <script lang="ts">
 	import { ide } from "#lib/ide/ide.svelte.js";
 	import { openFile, closeTab, closeOthers, closeToRight, closeAll } from "#lib/vfs.js";
+	import MenuShell from "./MenuShell.svelte";
 </script>
 
 {#if ide.tabCtx}
-	<button
-		class="veil"
-		aria-label="Close tab menu"
-		onclick={() => (ide.tabCtx = null)}
-		onkeydown={(e) => {
-			if (e.key === "Escape") ide.tabCtx = null;
-		}}
-	></button>
-	<div
-		class="ctx"
-		role="menu"
-		style={`left:${Math.min(ide.tabCtx.x, window.innerWidth - 230)}px;top:${ide.tabCtx.y}px`}
+	<MenuShell
+		x={ide.tabCtx.x}
+		y={ide.tabCtx.y}
+		label="Close tab menu"
+		onClose={() => (ide.tabCtx = null)}
 	>
 		<button
 			onclick={() => {
@@ -69,5 +63,5 @@
 				ide.toast("Revealed in Explorer (mock)");
 			}}><span>Reveal in Explorer</span></button
 		>
-	</div>
+	</MenuShell>
 {/if}

@@ -28,11 +28,11 @@
 				}}
 				oncontextmenu={(e) => {
 					e.preventDefault();
-					ide.tabCtx = {
+					ide.openTabCtx({
 						x: e.clientX,
 						y: e.clientY,
 						path: t,
-					};
+					});
 				}}
 				ondragstart={(e) => {
 					ide.dragTab = t;
@@ -90,11 +90,11 @@
 			title="More editor actions"
 			onclick={(e) => {
 				const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-				ide.tabCtx = {
+				ide.openTabCtx({
 					x: r.left - 120,
 					y: r.bottom + 4,
 					path: ide.active,
-				};
+				});
 			}}><Icon name="ellipsis" size={15} /></button
 		>
 	</div>

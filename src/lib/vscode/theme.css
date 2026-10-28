@@ -743,13 +743,15 @@ button.veil {
 
 .ctx {
 	position: fixed;
-	z-index: 60;
+	z-index: 80;
 	background: var(--vs-bg3);
 	border: 1px solid var(--vs-border2);
 	border-radius: 4px;
 	min-width: 170px;
 	padding: 4px;
 	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+	max-height: min(60vh, 420px);
+	overflow: auto;
 }
 .ctx button {
 	display: flex;
@@ -1009,11 +1011,12 @@ button.veil {
 	background: var(--vs-hover);
 }
 .titlemenu {
-	position: absolute;
-	top: 30px;
-	left: 90px;
+	position: fixed;
 	z-index: 80;
 	min-width: 250px;
+	max-width: min(90vw, 340px);
+	max-height: min(60vh, 420px);
+	overflow: auto;
 	background: var(--vs-bg3);
 	border: 1px solid var(--vs-border2);
 	border-radius: 6px;
@@ -1118,11 +1121,19 @@ button.veil {
 	background: var(--vs-accent2);
 }
 .sidemenu {
-	margin: 0 8px 6px;
+	position: absolute;
+	top: 32px;
+	right: 8px;
+	left: 8px;
+	z-index: 80;
 	background: var(--vs-bg3);
 	border: 1px solid var(--vs-border2);
 	border-radius: 6px;
 	padding: 4px;
+	box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+	max-height: min(50vh, 320px);
+	overflow: auto;
+	animation: menuin 0.1s ease-out;
 }
 .sidemenu button {
 	display: block;
@@ -1136,7 +1147,13 @@ button.veil {
 	cursor: pointer;
 }
 .sidemenu button:hover {
-	background: var(--vs-accent);
+	background: #094771;
+	color: #fff;
+}
+.sidemenu button:focus-visible {
+	outline: 1px solid #007fd4;
+	outline-offset: -1px;
+	background: #094771;
 	color: #fff;
 }
 .sec-title.collapsible {
@@ -1532,12 +1549,16 @@ button.veil {
 	color: #fff;
 }
 .titlemenu {
-	left: 44px;
+	position: fixed;
 	min-width: 280px;
+	max-width: min(90vw, 340px);
+	max-height: min(60vh, 420px);
+	overflow: auto;
 	border-radius: 8px;
 	padding: 5px;
 	background: #252526;
 	border-color: #454545;
+	z-index: 80;
 }
 .titlemenu button {
 	align-items: center;
@@ -1915,6 +1936,7 @@ button.veil {
 	left: 0;
 	z-index: 70;
 	min-width: 280px;
+	max-width: min(90vw, 340px);
 	max-height: 260px;
 	overflow: auto;
 	background: #252526;
@@ -2097,6 +2119,14 @@ button.veil {
 	background: #094771;
 	color: #fff;
 }
+.sbmenu.align-right {
+	left: auto;
+	right: 0;
+}
+.sbmenu {
+	max-height: min(50vh, 340px);
+	overflow: auto;
+}
 .sbmenu .sep {
 	height: 1px;
 	background: #454545;
@@ -2149,7 +2179,27 @@ button.veil {
 	margin-left: auto;
 }
 button.veil.up {
-	bottom: 22px;
+	inset: 0;
+}
+.ctx button:focus-visible,
+.titlemenu button:focus-visible,
+.projmenu button:focus-visible,
+.layoutmenu button:focus-visible,
+.actmenu button:focus-visible,
+.symmenu button:focus-visible,
+.sbmenu button:focus-visible {
+	outline: 1px solid #007fd4;
+	outline-offset: -1px;
+	background: #094771;
+	color: #fff;
+}
+.projmenu,
+.layoutmenu,
+.actmenu,
+.symmenu,
+.sbmenu {
+	max-height: min(60vh, 420px);
+	overflow: auto;
 }
 /* palette */
 .palette {

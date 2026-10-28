@@ -103,6 +103,7 @@ export class IdeState {
 	previewZoomed = $state(false);
 	dragging = $state(false);
 	titleMenu = $state<string | null>(null);
+	titleMenuPos = $state<{ x: number; y: number } | null>(null);
 	tabCtx = $state<{ x: number; y: number; path: string } | null>(null);
 	editorCtx = $state<{ x: number; y: number } | null>(null);
 	sideMenu = $state(false);
@@ -614,6 +615,7 @@ export class IdeState {
 
 	closeAllMenus() {
 		this.titleMenu = null;
+		this.titleMenuPos = null;
 		this.projMenu = false;
 		this.sideMenu = false;
 		this.tabCtx = null;
@@ -627,6 +629,31 @@ export class IdeState {
 		this.eolMenu = false;
 		this.crumbSymMenu = false;
 		this.layoutMenu = false;
+	}
+
+	/** Open one top-level menu exclusively (single-open invariant). */
+	openOnly(patch: () => void) {
+		this.closeAllMenus();
+		patch();
+	}
+
+	openTitleMenu(name: string, anchor?: { x: number; y: number } | null) {
+		const cur = this.titleMenu;
+		this.closeAllMenus();
+		if (cur !== name) {
+			this.titleMenu = name;
+			this.titleMenuPos = anchor ?? this.titleMenuPos;
+		}
+	}
+
+	openTabCtx(p: { x: number; y: number; path: string }) {
+		this.closeAllMenus();
+		this.tabCtx = p;
+	}
+
+	openEditorCtx(p: { x: number; y: number }) {
+		this.closeAllMenus();
+		this.editorCtx = p;
 	}
 
 	handleInspectSelect(info: InspectPayload | null) {
@@ -891,12 +918,33 @@ export class IdeState {
 		if (e.key === "Escape") {
 			if (this.gotoOpen) this.gotoOpen = false;
 			else if (this.langPick) this.langPick = false;
-			else if (this.tabCtx) this.tabCtx = null;
-			else if (this.editorCtx) this.editorCtx = null;
-			else if (this.titleMenu) this.titleMenu = null;
-			else this.closeAllMenus();
+			else if (
+				this.tabCtx ||
+				this.editorCtx ||
+				this.titleMenu ||
+				this.sideMenu ||
+				this.projMenu ||
+				this.layoutMenu ||
+				this.branchMenu ||
+				this.indentMenu ||
+				this.encodingMenu ||
+				this.eolMenu ||
+				this.settingsMenu ||
+				this.accountsMenu ||
+				this.notifCenter ||
+				this.crumbSymMenu
+			)
+				this.closeAllMenus();
 			if (this.previewZoomed) this.previewZoomed = false;
-			if (!this.gotoOpen && !this.langPick && !this.tabCtx && !this.editorCtx && !this.titleMenu)
+			if (
+				!this.gotoOpen &&
+				!this.langPick &&
+				!this.tabCtx &&
+				!this.editorCtx &&
+				!this.titleMenu &&
+				!this.sideMenu &&
+				!this.notifCenter
+			)
 				this.palette = false;
 		}
 	}

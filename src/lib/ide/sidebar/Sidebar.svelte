@@ -7,8 +7,11 @@
 	import DebugView from "#lib/ide/sidebar/DebugView.svelte";
 	import ExtView from "#lib/ide/sidebar/ExtView.svelte";
 	import SettingsView from "#lib/ide/sidebar/SettingsView.svelte";
+	import { menuKeys, watchOutside, focusFirstMenuItem } from "#lib/ide/menus/menu.js";
 
 	let sideSashEl: HTMLElement | null = $state(null);
+	let sideMenuEl: HTMLElement | null = $state(null);
+	let moreBtnEl: HTMLElement | null = $state(null);
 
 	function sideSashDown(e: PointerEvent) {
 		if (e.pointerType === "mouse" && e.button !== 0) return;
@@ -37,6 +40,19 @@
 			/* noop */
 		}
 	}
+
+	$effect(() => {
+		if (ide.sideMenu && sideMenuEl) focusFirstMenuItem(sideMenuEl);
+	});
+
+	// No veil: it would push layout and swallow trigger clicks.
+	$effect(() => {
+		if (!ide.sideMenu) return;
+		return watchOutside(
+			() => [sideMenuEl, moreBtnEl],
+			() => ide.closeAllMenus(),
+		);
+	});
 </script>
 
 {#if ide.sidebar}
@@ -70,36 +86,47 @@
 					<button
 						class="iconbtn"
 						title="More actions"
-						onclick={() => (ide.sideMenu = !ide.sideMenu)}
+						aria-label="More actions"
+						aria-haspopup="menu"
+						aria-expanded={ide.sideMenu}
+						bind:this={moreBtnEl}
+						onclick={() => ide.openOnly(() => (ide.sideMenu = true))}
 						><Icon name="ellipsis" size={15} /></button
 					>
 				{/if}
 			</span>
 		</div>
 		{#if ide.sideMenu && ide.sideView === "explorer"}
-			<div class="sidemenu" role="menu">
+			<div
+				class="sidemenu"
+				role="menu"
+				tabindex="-1"
+				bind:this={sideMenuEl}
+				onkeydown={(e) => menuKeys(e, sideMenuEl, () => ide.closeAllMenus())}
+				oncontextmenu={(e) => e.preventDefault()}
+			>
 				<button
 					onclick={() => {
 						ide.doCreateFile("/", "untitled.html");
-						ide.sideMenu = false;
+						ide.closeAllMenus();
 					}}>New File</button
 				>
 				<button
 					onclick={() => {
 						ide.doCreateFolder("/", "new-folder");
-						ide.sideMenu = false;
+						ide.closeAllMenus();
 					}}>New Folder</button
 				>
 				<button
 					onclick={() => {
 						ide.collapseNonce += 1;
-						ide.sideMenu = false;
+						ide.closeAllMenus();
 					}}>Collapse All</button
 				>
 				<button
 					onclick={() => {
 						ide.openNewProjectDialog();
-						ide.sideMenu = false;
+						ide.closeAllMenus();
 					}}>New Project…</button
 				>
 			</div>

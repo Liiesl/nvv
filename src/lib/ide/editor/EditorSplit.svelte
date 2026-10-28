@@ -62,7 +62,7 @@
 			const el = e.target as HTMLElement;
 			if (el.closest(".monaco-host")) {
 				e.preventDefault();
-				ide.editorCtx = { x: e.clientX, y: e.clientY };
+				ide.openEditorCtx({ x: e.clientX, y: e.clientY });
 			}
 		}}
 	>

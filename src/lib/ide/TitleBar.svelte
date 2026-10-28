@@ -2,6 +2,60 @@
 	import Icon from "#lib/components/Icon.svelte";
 	import { ide } from "#lib/ide/ide.svelte.js";
 	import { basename, closeOthers, closeAll } from "#lib/vfs.js";
+	import { menuKeys, focusFirstMenuItem, watchOutside } from "#lib/ide/menus/menu.js";
+
+	let titleMenuEl: HTMLElement | null = $state(null);
+	let menubarEl: HTMLElement | null = $state(null);
+	let projWrapEl: HTMLElement | null = $state(null);
+	let projMenuEl: HTMLElement | null = $state(null);
+	let layoutWrapEl: HTMLElement | null = $state(null);
+	let layoutMenuEl: HTMLElement | null = $state(null);
+
+	function titleAnchor(el: HTMLElement | null) {
+		if (!el || typeof window === "undefined") return null;
+		const r = el.getBoundingClientRect();
+		return { x: Math.max(8, Math.min(r.left, window.innerWidth - 300)), y: r.bottom + 4 };
+	}
+
+	function toggleTitle(m: string, el: HTMLElement | null) {
+		ide.openTitleMenu(m, titleAnchor(el));
+	}
+
+	function hoverTitle(m: string, el: HTMLElement | null) {
+		if (ide.titleMenu && ide.titleMenu !== m) {
+			ide.titleMenu = m;
+			ide.titleMenuPos = titleAnchor(el);
+		}
+	}
+
+	$effect(() => {
+		void ide.titleMenu;
+		if (ide.titleMenu && titleMenuEl) focusFirstMenuItem(titleMenuEl);
+	});
+
+	// Outside-click dismissal without a veil overlay (a veil would cover
+	// the other menubuttons and force close-first-then-open on switch).
+	$effect(() => {
+		if (!ide.titleMenu) return;
+		return watchOutside(
+			() => [titleMenuEl, menubarEl],
+			() => ide.closeAllMenus(),
+		);
+	});
+	$effect(() => {
+		if (!ide.projMenu) return;
+		return watchOutside(
+			() => [projMenuEl, projWrapEl],
+			() => ide.closeAllMenus(),
+		);
+	});
+	$effect(() => {
+		if (!ide.layoutMenu) return;
+		return watchOutside(
+			() => [layoutMenuEl, layoutWrapEl],
+			() => ide.closeAllMenus(),
+		);
+	});
 </script>
 
 <div class="titlebar" data-tauri-drag-region>
@@ -13,28 +67,30 @@
 			/><path fill="#007ACC" d="m9.4 12.4-2.2 2.2 10.3 6.4c.6.4 1.4 0 1.4-.8V4.6L9.4 12.4Z" /></svg
 		>
 	</div>
-	<div class="menu">
+	<div class="menu" role="menubar" aria-label="Application menu" bind:this={menubarEl}>
 		{#each ["File", "Edit", "Selection", "View", "Go", "Run", "Terminal", "Help"] as m}
 			<button
 				type="button"
 				class="menubtn"
 				class:on={ide.titleMenu === m}
-				onmouseenter={() => {
-					if (ide.titleMenu && ide.titleMenu !== m) ide.titleMenu = m;
-				}}
-				onclick={() => (ide.titleMenu = ide.titleMenu === m ? null : m)}>{m}</button
+				aria-haspopup="menu"
+				aria-expanded={ide.titleMenu === m}
+				onmouseenter={(e) => hoverTitle(m, e.currentTarget as HTMLElement)}
+				onclick={(e) => toggleTitle(m, e.currentTarget as HTMLElement)}>{m}</button
 			>
 		{/each}
 		{#if ide.titleMenu}
-			<button
-				class="veil"
-				aria-label="Close menu"
-				onclick={() => (ide.titleMenu = null)}
-				onkeydown={(e) => {
-					if (e.key === "Escape") ide.titleMenu = null;
-				}}
-			></button>
-			<div class="titlemenu" role="menu">
+			<div
+				class="titlemenu"
+				role="menu"
+				tabindex="-1"
+				aria-label={ide.titleMenu}
+				bind:this={titleMenuEl}
+				style={ide.titleMenuPos
+					? `left:${ide.titleMenuPos.x}px;top:${ide.titleMenuPos.y}px`
+					: undefined}
+				onkeydown={(e) => menuKeys(e, titleMenuEl, () => ide.closeAllMenus())}
+			>
 				{#if ide.titleMenu === "File"}
 					<button
 						onclick={() => {
@@ -237,26 +293,26 @@
 			</div>
 		{/if}
 	</div>
-	<div class="projwrap">
+	<div class="projwrap" bind:this={projWrapEl}>
 		<button
 			class="btn small ghost projbtn"
 			title="Switch project"
 			aria-label="Switch project"
-			onclick={() => (ide.projMenu = !ide.projMenu)}
+			aria-haspopup="menu"
+			aria-expanded={ide.projMenu}
+			onclick={() => ide.openOnly(() => (ide.projMenu = true))}
 			><Icon name="files" size={14} />
 			{ide.activeProjectName}
 			<Icon name="chevron-down" size={14} /></button
 		>
 		{#if ide.projMenu}
-			<button
-				class="veil"
-				aria-label="Close projects menu"
-				onclick={() => (ide.projMenu = false)}
-				onkeydown={(e) => {
-					if (e.key === "Escape") ide.projMenu = false;
-				}}
-			></button>
-			<div class="projmenu" role="menu">
+			<div
+				class="projmenu"
+				role="menu"
+				tabindex="-1"
+				bind:this={projMenuEl}
+				onkeydown={(e) => menuKeys(e, e.currentTarget as HTMLElement, () => ide.closeAllMenus())}
+			>
 				<div class="projmenu-head">
 					Projects ({ide.projectsSnap.length})
 				</div>
@@ -334,18 +390,24 @@
 			aria-label="Toggle Panel"
 			onclick={() => (ide.showPanel = !ide.showPanel)}><Icon name="terminal" size={16} /></button
 		>
-		<div class="layoutwrap">
+		<div class="layoutwrap" bind:this={layoutWrapEl}>
 			<button
 				class="iconbtn"
 				title="Customize Layout"
 				aria-label="Customize Layout"
-				onclick={() => (ide.layoutMenu = !ide.layoutMenu)}
+				aria-haspopup="menu"
+				aria-expanded={ide.layoutMenu}
+				onclick={() => ide.openOnly(() => (ide.layoutMenu = true))}
 				><Icon name="extensions" size={15} /></button
 			>
 			{#if ide.layoutMenu}
-				<button class="veil" aria-label="Close layout" onclick={() => (ide.layoutMenu = false)}
-				></button>
-				<div class="layoutmenu" role="menu">
+				<div
+					class="layoutmenu"
+					role="menu"
+					tabindex="-1"
+					bind:this={layoutMenuEl}
+					onkeydown={(e) => menuKeys(e, e.currentTarget as HTMLElement, () => ide.closeAllMenus())}
+				>
 					<div class="projmenu-head">Layout</div>
 					<button
 						onclick={() => {

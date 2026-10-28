@@ -2,6 +2,18 @@
 	import FileIcon from "#lib/components/FileIcon.svelte";
 	import { ide } from "#lib/ide/ide.svelte.js";
 	import { languageOf } from "#lib/vfs.js";
+	import { menuKeys, watchOutside } from "#lib/ide/menus/menu.js";
+
+	let symBtnEl: HTMLElement | null = $state(null);
+	let symMenuEl: HTMLElement | null = $state(null);
+
+	$effect(() => {
+		if (!ide.crumbSymMenu) return;
+		return watchOutside(
+			() => [symMenuEl, symBtnEl],
+			() => ide.closeAllMenus(),
+		);
+	});
 </script>
 
 {#if ide.active}
@@ -33,19 +45,28 @@
 					type="button"
 					class="crumb sym"
 					title="Go to symbol in file"
-					onclick={() => (ide.crumbSymMenu = !ide.crumbSymMenu)}
+					aria-haspopup="menu"
+					aria-expanded={ide.crumbSymMenu}
+					bind:this={symBtnEl}
+					onclick={() => ide.openOnly(() => (ide.crumbSymMenu = true))}
 					>⌖ {ide.outline[0]?.label ?? ""} <small>▾</small></button
 				>
 				{#if ide.crumbSymMenu}
-					<button class="veil" aria-label="Close symbols" onclick={() => (ide.crumbSymMenu = false)}
-					></button>
-					<div class="symmenu" role="menu">
+					<div
+						class="symmenu"
+						role="menu"
+						tabindex="-1"
+						bind:this={symMenuEl}
+						onkeydown={(e) =>
+							menuKeys(e, e.currentTarget as HTMLElement, () => ide.closeAllMenus())}
+						oncontextmenu={(e) => e.preventDefault()}
+					>
 						{#each ide.outline.slice(0, 20) as o}
 							<button
 								onclick={() => {
 									ide.revealLine = 0;
 									requestAnimationFrame(() => (ide.revealLine = o.line));
-									ide.crumbSymMenu = false;
+									ide.closeAllMenus();
 								}}
 								><span class="okind">{o.kind}</span>
 								{o.label} <small>:{o.line}</small></button

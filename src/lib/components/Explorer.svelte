@@ -3,6 +3,7 @@
 	import { ide } from "#lib/ide/ide.svelte.js";
 	import Icon from "./Icon.svelte";
 	import FileIcon from "./FileIcon.svelte";
+	import MenuShell from "#lib/ide/menus/MenuShell.svelte";
 
 	let {
 		files,
@@ -110,6 +111,10 @@
 		}
 		renaming = null;
 	}
+	function openCtx(p: { x: number; y: number; path: string; type: "file" | "dir" }) {
+		ide.closeAllMenus();
+		ctx = p;
+	}
 	function autofocus(el: HTMLInputElement) {
 		el.focus();
 	}
@@ -119,6 +124,29 @@
 			fn();
 		}
 	}
+
+	// Single-open invariant: ide-owned menu wins over local explorer ctx.
+	$effect(() => {
+		void ide.titleMenu;
+		void ide.tabCtx;
+		void ide.editorCtx;
+		void ide.projMenu;
+		void ide.layoutMenu;
+		void ide.sideMenu;
+		void ide.branchMenu;
+		void ide.notifCenter;
+		if (
+			ide.titleMenu ||
+			ide.tabCtx ||
+			ide.editorCtx ||
+			ide.projMenu ||
+			ide.layoutMenu ||
+			ide.sideMenu ||
+			ide.branchMenu ||
+			ide.notifCenter
+		)
+			ctx = null;
+	});
 </script>
 
 <div class="tree">
@@ -145,12 +173,12 @@
 					onkeydown={(e) => onRowKey(e, () => toggle(n.path))}
 					oncontextmenu={(e) => {
 						e.preventDefault();
-						ctx = {
+						openCtx({
 							x: e.clientX,
 							y: e.clientY,
 							path: n.path,
 							type: "dir",
-						};
+						});
 					}}
 				>
 					<span class="car"
@@ -217,12 +245,12 @@
 					}}
 					oncontextmenu={(e) => {
 						e.preventDefault();
-						ctx = {
+						openCtx({
 							x: e.clientX,
 							y: e.clientY,
 							path: n.path,
 							type: "file",
-						};
+						});
 					}}
 				>
 					<span class="ic"><FileIcon name={n.name} type="file" /></span>
@@ -251,20 +279,7 @@
 </div>
 
 {#if ctx}
-	<button
-		class="veil"
-		aria-label="Close menu"
-		style="position:fixed;inset:0;z-index:59;background:transparent;border:none;cursor:default"
-		onclick={() => (ctx = null)}
-		oncontextmenu={(e) => {
-			e.preventDefault();
-			ctx = null;
-		}}
-		onkeydown={(e) => {
-			if (e.key === "Escape") ctx = null;
-		}}
-	></button>
-	<div class="ctx" role="menu" style={`left:${ctx.x}px;top:${ctx.y}px`}>
+	<MenuShell x={ctx.x} y={ctx.y} label="Close menu" onClose={() => (ctx = null)}>
 		{#if ctx.type === "dir"}
 			<button
 				onclick={() => {
@@ -293,5 +308,5 @@
 				ctx = null;
 			}}><Icon name="trash" /> Delete</button
 		>
-	</div>
+	</MenuShell>
 {/if}

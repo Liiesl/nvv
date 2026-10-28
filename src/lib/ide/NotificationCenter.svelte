@@ -1,12 +1,36 @@
 <script lang="ts">
 	import { ide } from "#lib/ide/ide.svelte.js";
 	import Icon from "#lib/components/Icon.svelte";
+	import { watchOutside } from "#lib/ide/menus/menu.js";
+
+	let notifEl: HTMLElement | null = $state(null);
+
+	// Bell buttons are cross-component triggers (open-only, no toggle), so a
+	// capture-phase outside watcher is safe: clicking a bell dismisses here,
+	// then the bell re-opens in the same gesture — no stuck state.
+	$effect(() => {
+		if (!ide.notifCenter) return;
+		return watchOutside(
+			() => [notifEl],
+			() => ide.closeAllMenus(),
+		);
+	});
 </script>
 
 {#if ide.notifCenter}
-	<button class="veil" aria-label="Close notifications" onclick={() => (ide.notifCenter = false)}
-	></button>
-	<div class="notifcenter" role="dialog" aria-label="Notifications">
+	<div
+		class="notifcenter"
+		role="dialog"
+		aria-label="Notifications"
+		tabindex="-1"
+		bind:this={notifEl}
+		onkeydown={(e) => {
+			if (e.key === "Escape") {
+				e.stopPropagation();
+				ide.closeAllMenus();
+			}
+		}}
+	>
 		<div class="notif-head">
 			<span>Notifications</span><button
 				class="iconbtn"
@@ -15,7 +39,7 @@
 					ide.toasts = [];
 					ide.logs = [];
 				}}><Icon name="trash" size={13} /> Clear</button
-			><button class="iconbtn" aria-label="Close" onclick={() => (ide.notifCenter = false)}
+			><button class="iconbtn" aria-label="Close" onclick={() => ide.closeAllMenus()}
 				><Icon name="close" size={13} /></button
 			>
 		</div>
