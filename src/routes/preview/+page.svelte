@@ -2,6 +2,8 @@
     import { onMount, onDestroy } from "svelte";
     import { buildPreview, type BuiltPreview } from "#lib/preview.js";
     import type { VNode } from "#lib/vfs.js";
+    import type { InspectPayload } from "#lib/inspect.js";
+    import { isInspectKind } from "#lib/inspect.js";
 
     const BLOB_PREFIX = "neverview:project:";
     const INDEX_KEY = "neverview:projects:v1";
@@ -33,6 +35,10 @@
 
     let timer: ReturnType<typeof setTimeout> | null = null;
     let channel: BroadcastChannel | null = null;
+    let frame: HTMLIFrameElement | null = $state(null);
+    let inspectOn = $state(false);
+    let hover = $state<InspectPayload | null>(null);
+    let selected = $state<InspectPayload | null>(null);
 
     const htmlFiles = $derived(
         snapshot
@@ -111,6 +117,47 @@
         }
     }
 
+    function sendInspect() {
+        try {
+            frame?.contentWindow?.postMessage(
+                { __nv: 2, type: inspectOn ? "inspect-on" : "inspect-off" },
+                "*",
+            );
+        } catch {
+            /* noop */
+        }
+        if (!inspectOn) {
+            try {
+                const doc = frame?.contentDocument;
+                const ov = doc?.querySelector?.(
+                    '[data-nv-inspect="overlay"]',
+                ) as HTMLElement | null;
+                const lb = doc?.querySelector?.(
+                    '[data-nv-inspect="label"]',
+                ) as HTMLElement | null;
+                if (ov) ov.style.display = "none";
+                if (lb) lb.style.display = "none";
+            } catch {
+                /* noop */
+            }
+        }
+    }
+
+    function toggleInspect() {
+        inspectOn = !inspectOn;
+        hover = null;
+        if (!inspectOn) selected = null;
+        sendInspect();
+    }
+
+    async function copyText(text: string) {
+        try {
+            await navigator.clipboard.writeText(text);
+        } catch {
+            /* noop */
+        }
+    }
+
     onMount(() => {
         const q = new URLSearchParams(location.search);
         const qp = q.get("project");
@@ -124,6 +171,64 @@
         }
         reloadFromStorage();
         window.addEventListener("storage", onStorage);
+        const onMsg = (e: MessageEvent) => {
+            const d = e.data as {
+                __nv?: number;
+                kind?: string;
+                tag?: string;
+                id?: string;
+                classes?: string[];
+                selector?: string;
+                width?: number;
+                height?: number;
+                outerHtml?: string;
+            } | null;
+            if (!d || d.__nv !== 1 || !isInspectKind(d.kind)) return;
+            if (d.kind === "inspect-hover") {
+                hover = {
+                    tag: d.tag ?? "?",
+                    id: d.id ?? "",
+                    classes: d.classes ?? [],
+                    selector: d.selector ?? "",
+                    width: d.width ?? 0,
+                    height: d.height ?? 0,
+                    outerHtml: d.outerHtml ?? "",
+                };
+            } else if (d.kind === "inspect-select") {
+                const info: InspectPayload = {
+                    tag: d.tag ?? "?",
+                    id: d.id ?? "",
+                    classes: d.classes ?? [],
+                    selector: d.selector ?? "",
+                    width: d.width ?? 0,
+                    height: d.height ?? 0,
+                    outerHtml: d.outerHtml ?? "",
+                };
+                selected = info;
+                hover = info;
+            } else if (d.kind === "inspect-escape") {
+                inspectOn = false;
+                hover = null;
+                selected = null;
+                sendInspect();
+            } else if (d.kind === "inspect-leave") {
+                hover = null;
+            }
+        };
+        const onKey = (e: KeyboardEvent) => {
+            const mod = e.ctrlKey || e.metaKey;
+            if (mod && e.shiftKey && e.key.toLowerCase() === "c") {
+                e.preventDefault();
+                toggleInspect();
+            } else if (e.key === "Escape" && inspectOn) {
+                inspectOn = false;
+                hover = null;
+                selected = null;
+                sendInspect();
+            }
+        };
+        window.addEventListener("message", onMsg);
+        window.addEventListener("keydown", onKey);
         try {
             channel = new BroadcastChannel(CH_NAME);
             channel.onmessage = (ev) => {
@@ -134,6 +239,10 @@
         } catch {
             channel = null;
         }
+        return () => {
+            window.removeEventListener("message", onMsg);
+            window.removeEventListener("keydown", onKey);
+        };
     });
 
     onDestroy(() => {
@@ -185,6 +294,13 @@
         >
         <button
             class="btn"
+            class:on={inspectOn}
+            onclick={toggleInspect}
+            title="Inspect: hover highlight (Ctrl+Shift+C)"
+            aria-pressed={inspectOn}>Inspect</button
+        >
+        <button
+            class="btn"
             onclick={() => {
                 reloadFromStorage();
                 rebuild();
@@ -192,12 +308,43 @@
         >
         <span class="status">{error || status}</span>
     </header>
+    {#if inspectOn}
+        <div class="inspectbar" role="status">
+            {#if selected ?? hover}
+                {@const info = selected ?? hover}
+                <span class="tag">{info?.tag}</span>
+                {#if info?.id}<span class="iid">#{info.id}</span>{/if}
+                {#if info?.classes?.length}<span class="cls"
+                        >.{info.classes.slice(0, 3).join(".")}</span
+                    >{/if}
+                <span class="dims">{info?.width}x{info?.height}</span>
+                <code class="sel">{info?.selector}</code>
+                <span class="sp"></span>
+                <button
+                    class="mini"
+                    onclick={() => info && copyText(info.selector)}
+                    >Copy selector</button
+                >
+                <button
+                    class="mini"
+                    onclick={() => info && copyText(info.outerHtml)}
+                    >Copy HTML</button
+                >
+            {:else}
+                <span class="hint"
+                    >Hover page to highlight — click to pin. Esc to exit.</span
+                >
+            {/if}
+        </div>
+    {/if}
     {#if error}<p class="err">{error}</p>{/if}
     {#if built}
         <iframe
             class="frame"
+            bind:this={frame}
             title="pinned preview"
             src={built.entryUrl}
+            onload={sendInspect}
             sandbox="allow-scripts allow-same-origin allow-modals allow-forms allow-popups"
         ></iframe>
     {/if}

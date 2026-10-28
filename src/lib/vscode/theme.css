@@ -918,3 +918,73 @@ button.veil {
         box-shadow: none;
     }
 }
+.iconbtn.on {
+    background: var(--vs-accent);
+    color: #fff;
+}
+.btn.on {
+    outline: 2px solid #79c0ff;
+    outline-offset: 1px;
+}
+.inspectbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #0d1117;
+    color: #c9d1d9;
+    padding: 4px 10px;
+    font-size: 12px;
+    border-bottom: 1px solid var(--vs-border);
+    font-family: var(--mono);
+    overflow: hidden;
+    white-space: nowrap;
+}
+.inspectbar .tag {
+    color: #7ee787;
+    font-weight: 700;
+}
+.inspectbar .iid {
+    color: #ffa657;
+}
+.inspectbar .cls {
+    color: #ffa657;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.inspectbar .dims {
+    color: #79c0ff;
+    flex: 0 0 auto;
+}
+.inspectbar .sel {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #9aa3b2;
+    background: transparent;
+}
+.inspectbar .sp {
+    flex: 0 0 auto;
+    margin-left: auto;
+}
+.inspectbar .hint {
+    color: #9aa3b2;
+}
+.inspectbar .mini {
+    background: #1a212f;
+    color: inherit;
+    border: 1px solid #2a3345;
+    border-radius: 4px;
+    padding: 2px 8px;
+    cursor: pointer;
+    font: inherit;
+    font-size: 11px;
+    flex: 0 0 auto;
+}
+.inspectbar .mini:hover {
+    background: #2a3345;
+}
+.nv-inspect-match {
+    background: rgba(56, 139, 253, 0.35) !important;
+    outline: 1px solid #1f6feb !important;
+    outline-offset: -1px;
+}

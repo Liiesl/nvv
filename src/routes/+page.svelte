@@ -75,7 +75,37 @@
     let previewRef = $state<{
         refresh: () => void;
         openNewTab: () => void;
+        clearInspectSelection: () => void;
     } | null>(null);
+    let inspectTarget = $state<import("#lib/inspect.js").InspectPayload | null>(
+        null,
+    );
+
+    function handleInspectSelect(
+        info: import("#lib/inspect.js").InspectPayload | null,
+    ) {
+        inspectTarget = info;
+        if (!info) return;
+        // Inspected DOM comes from the entry HTML. If the user is looking
+        // at another file that doesn't contain the element, jump to entry
+        // so Monaco can reveal the source.
+        if (active !== entry) {
+            const cur = filesSnap[active]?.content ?? "";
+            const needle = info.id ? info.id : `<${info.tag}`;
+            if (!cur.includes(needle)) openFile(entry);
+        }
+    }
+
+    function handleInspectClearFromEditor() {
+        // User clicked/typed elsewhere in Monaco: drop the transient
+        // highlight on both sides so nothing looks stuck.
+        inspectTarget = null;
+        try {
+            previewRef?.clearInspectSelection();
+        } catch {
+            /* noop */
+        }
+    }
 
     $effect(() => {
         const u1 = files.subscribe(
@@ -620,6 +650,8 @@
                             <Monaco
                                 path={active}
                                 {content}
+                                inspectTarget={inspectTarget}
+                                onInspectClear={handleInspectClearFromEditor}
                                 onChange={onEdit}
                                 onCursor={(l: number, c: number) => {
                                     line = l;
@@ -673,6 +705,7 @@
                                 {onLog}
                                 zoomed={previewZoomed}
                                 onToggleZoom={togglePreviewZoom}
+                                onInspectSelect={handleInspectSelect}
                                 bind:this={previewRef}
                             />
                         </div>

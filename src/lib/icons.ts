@@ -249,6 +249,18 @@ export const icons = {
       },
     ],
   },
+  inspect: {
+    viewBox: "0 0 16 16",
+    paths: [
+      {
+        d: "M7 1H9V6H7V1ZM7 10H9V15H7V10ZM1 7H6V9H1V7ZM10 7H15V9H10V7Z",
+      },
+      {
+        d: "M8 5A3 3 0 1 0 8 11A3 3 0 1 0 8 5ZM8 6.5A1.5 1.5 0 1 1 8 9.5A1.5 1.5 0 1 1 8 6.5Z",
+        fillRule: "evenodd",
+      },
+    ],
+  },
 } as const satisfies Record<string, IconDefinition>;
 
 export type IconName = keyof typeof icons;
