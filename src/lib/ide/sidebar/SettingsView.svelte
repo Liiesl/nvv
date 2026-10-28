@@ -4,7 +4,10 @@
 
 <div class="searchbox">
 	<label><input type="checkbox" bind:checked={ide.autoReload} /> Auto-reload preview</label>
-	<label><input type="checkbox" bind:checked={ide.showPreview} /> Show preview</label>
+	<label
+		><input type="checkbox" checked={ide.hasPreviewOpen} onchange={() => ide.togglePreviewTab()} /> Show
+		preview tab</label
+	>
 	<label><input type="checkbox" bind:checked={ide.showPanel} /> Show panel</label>
 	<label><input type="checkbox" bind:checked={ide.minimapOn} /> Minimap</label>
 	<label

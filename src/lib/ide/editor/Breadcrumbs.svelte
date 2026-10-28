@@ -92,7 +92,7 @@
 				class="mini-crumb"
 				title="Go to Line/Column"
 				onclick={() => {
-					ide.gotoDraft = String(ide.line);
+					ide.gotoDraft = String(ide.cursorFor(ide.activeGroupId).line);
 					ide.gotoOpen = true;
 				}}>Ln {ide.line}, Col {ide.col}</button
 			>

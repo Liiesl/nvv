@@ -145,7 +145,7 @@
 			class="it"
 			title="Go to line"
 			onclick={() => {
-				ide.gotoDraft = String(ide.line);
+				ide.gotoDraft = String(ide.cursorFor(ide.activeGroupId).line);
 				ide.gotoOpen = true;
 			}}>Ln {ide.line}, Col {ide.col}</button
 		>
@@ -277,9 +277,8 @@
 		<button
 			type="button"
 			class="it"
-			title="Toggle preview"
-			onclick={() => (ide.showPreview = !ide.showPreview)}
-			><Icon name="browser" size={13} /> Go Live</button
+			title="Toggle preview tab"
+			onclick={() => ide.togglePreviewTab()}><Icon name="browser" size={13} /> Go Live</button
 		>
 		<button
 			type="button"

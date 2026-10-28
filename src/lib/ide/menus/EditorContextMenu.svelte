@@ -39,7 +39,7 @@
 		>
 		<button
 			onclick={() => {
-				ide.gotoDraft = String(ide.line);
+				ide.gotoDraft = String(ide.cursorFor(ide.activeGroupId).line);
 				ide.gotoOpen = true;
 				ide.editorCtx = null;
 			}}><span>Go to Line…</span><small>Ctrl+G</small></button

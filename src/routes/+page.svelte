@@ -5,8 +5,6 @@
 	import TitleBar from "#lib/ide/TitleBar.svelte";
 	import ActivityBar from "#lib/ide/ActivityBar.svelte";
 	import Sidebar from "#lib/ide/sidebar/Sidebar.svelte";
-	import TabsBar from "#lib/ide/editor/TabsBar.svelte";
-	import Breadcrumbs from "#lib/ide/editor/Breadcrumbs.svelte";
 	import EditorSplit from "#lib/ide/editor/EditorSplit.svelte";
 	import BottomPanel from "#lib/ide/panel/BottomPanel.svelte";
 	import StatusBar from "#lib/ide/StatusBar.svelte";
@@ -70,14 +68,16 @@
 </svelte:head>
 
 {#if browser}
-	<div class="ide" class:preview-zoomed={ide.previewZoomed} class:has-error={ide.errCount > 0}>
+	<div
+		class="ide"
+		class:group-maximized={ide.maximizedGroupId !== null}
+		class:has-error={ide.errCount > 0}
+	>
 		<TitleBar />
 		<div class="workbench">
 			<ActivityBar />
 			<Sidebar />
 			<div class="main">
-				<TabsBar />
-				<Breadcrumbs />
 				<EditorSplit />
 				<BottomPanel />
 			</div>

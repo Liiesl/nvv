@@ -1,7 +1,7 @@
 <script lang="ts">
 	import Icon from "#lib/components/Icon.svelte";
 	import { ide } from "#lib/ide/ide.svelte.js";
-	import { basename, closeOthers, closeAll } from "#lib/vfs.js";
+	import { basename } from "#lib/vfs.js";
 	import { menuKeys, focusFirstMenuItem, watchOutside } from "#lib/ide/menus/menu.js";
 
 	let titleMenuEl: HTMLElement | null = $state(null);
@@ -107,21 +107,22 @@
 					<div class="sep"></div>
 					<button
 						onclick={() => {
-							if (ide.active) ide.closeTab(ide.active);
+							const g = ide.groups[ide.activeGroupId];
+							if (g && g.active >= 0) ide.closeTabInGroup(ide.activeGroupId, g.active);
 							ide.titleMenu = null;
 						}}><span>Close Tab</span> <small>Ctrl+W</small></button
 					>
 					<button
 						onclick={() => {
-							if (ide.active) closeOthers(ide.active);
+							ide.runPaletteCommand("close-others");
 							ide.titleMenu = null;
-						}}><span>Close Others</span></button
+						}}><span>Close Others in Group</span></button
 					>
 					<button
 						onclick={() => {
-							closeAll();
+							ide.runPaletteCommand("close-all");
 							ide.titleMenu = null;
-						}}><span>Close All</span></button
+						}}><span>Close All in Group</span></button
 					>
 					<div class="sep"></div>
 					<button
@@ -143,7 +144,7 @@
 					>
 					<button
 						onclick={() => {
-							ide.gotoDraft = String(ide.line);
+							ide.gotoDraft = String(ide.cursorFor(ide.activeGroupId).line);
 							ide.gotoOpen = true;
 							ide.titleMenu = null;
 						}}><span>Go to Line…</span> <small>Ctrl+G</small></button
@@ -202,20 +203,34 @@
 					>
 					<button
 						onclick={() => {
-							ide.showPreview = !ide.showPreview;
+							ide.togglePreviewTab();
 							ide.titleMenu = null;
 						}}
 						><span style="display:flex;align-items:center;gap:6px"
-							>{#if ide.showPreview}<Icon name="check" size={13} />{:else}<span
+							>{#if ide.hasPreviewOpen}<Icon name="check" size={13} />{:else}<span
 									style="width:13px;height:13px;display:inline-block"
-								></span>{/if}Preview</span
+								></span>{/if}Preview Tab</span
 						></button
 					>
 					<button
 						onclick={() => {
-							ide.togglePreviewZoom();
+							ide.toggleMaximize();
 							ide.titleMenu = null;
-						}}><span>Zoom Preview</span></button
+						}}
+						><span>{ide.maximizedGroupId ? "Exit Maximized Group" : "Maximize Active Group"}</span
+						></button
+					>
+					<button
+						onclick={() => {
+							ide.splitActiveGroup("row");
+							ide.titleMenu = null;
+						}}><span>Split Right</span><small>Ctrl+\</small></button
+					>
+					<button
+						onclick={() => {
+							ide.splitActiveGroup("col");
+							ide.titleMenu = null;
+						}}><span>Split Down</span></button
 					>
 					<div class="sep"></div>
 					<button
@@ -246,7 +261,7 @@
 					>
 					<button
 						onclick={() => {
-							ide.gotoDraft = String(ide.line);
+							ide.gotoDraft = String(ide.cursorFor(ide.activeGroupId).line);
 							ide.gotoOpen = true;
 							ide.titleMenu = null;
 						}}><span>Go to Line…</span> <small>Ctrl+G</small></button
@@ -455,20 +470,40 @@
 					>
 					<button
 						onclick={() => {
-							ide.showPreview = !ide.showPreview;
+							ide.togglePreviewTab();
 							ide.layoutMenu = false;
 						}}
 						><span style="display:flex;align-items:center;gap:6px"
-							>{#if ide.showPreview}<Icon name="check" size={13} />{:else}<span
+							>{#if ide.hasPreviewOpen}<Icon name="check" size={13} />{:else}<span
 									style="width:13px;height:13px;display:inline-block"
-								></span>{/if}Preview (side)</span
+								></span>{/if}Preview Tab</span
 						></button
 					>
 					<button
 						onclick={() => {
-							ide.togglePreviewZoom();
+							ide.toggleMaximize();
 							ide.layoutMenu = false;
-						}}><span>Zoom Preview</span></button
+						}}
+						><span>{ide.maximizedGroupId ? "Exit Maximized Group" : "Maximize Active Group"}</span
+						></button
+					>
+					<button
+						onclick={() => {
+							ide.splitActiveGroup("row");
+							ide.layoutMenu = false;
+						}}><span>Split Right</span><small>Ctrl+\</small></button
+					>
+					<button
+						onclick={() => {
+							ide.splitActiveGroup("col");
+							ide.layoutMenu = false;
+						}}><span>Split Down</span></button
+					>
+					<button
+						onclick={() => {
+							ide.closeGroup(ide.activeGroupId);
+							ide.layoutMenu = false;
+						}}><span>Close Active Group</span></button
 					>
 					<div class="sep"></div>
 					<button

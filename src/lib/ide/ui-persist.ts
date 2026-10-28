@@ -3,19 +3,17 @@
 // Text inputs (search query, filters, commit msg, terminal history) intentionally reset.
 
 import type { PanelTab, SideView } from "#lib/ide/ide.svelte.js";
+import { sanitizePersistedLayout, type PersistedLayout } from "#lib/ide/layout.js";
 
 export interface GlobalUI {
 	sidebar: boolean;
 	sidebarW: number;
-	showPreview: boolean;
 	autoReload: boolean;
 	minimapOn: boolean;
 	fontSize: number;
 	showPanel: boolean;
 	panelH: number;
 	panelMax: boolean;
-	editorPct: number;
-	previewZoomed: boolean;
 	winMax: boolean;
 	openEditorsOpen: boolean;
 	outlineOpen: boolean;
@@ -32,6 +30,11 @@ export interface GlobalUI {
 	searchCase: boolean;
 	searchWord: boolean;
 	searchRegex: boolean;
+	layout: PersistedLayout | null;
+	// Deprecated: migrated into layout on load. Kept for backward-compat reads.
+	showPreview?: boolean;
+	editorPct?: number;
+	previewZoomed?: boolean;
 }
 
 export interface ProjectUI {
@@ -43,15 +46,12 @@ export interface ProjectUI {
 export const GLOBAL_DEFAULTS: GlobalUI = {
 	sidebar: true,
 	sidebarW: 268,
-	showPreview: true,
 	autoReload: true,
 	minimapOn: true,
 	fontSize: 13,
 	showPanel: true,
 	panelH: 168,
 	panelMax: false,
-	editorPct: 55,
-	previewZoomed: false,
 	winMax: false,
 	openEditorsOpen: true,
 	outlineOpen: true,
@@ -68,6 +68,7 @@ export const GLOBAL_DEFAULTS: GlobalUI = {
 	searchCase: false,
 	searchWord: false,
 	searchRegex: false,
+	layout: null,
 };
 
 export const PROJECT_DEFAULTS: ProjectUI = {
@@ -115,18 +116,21 @@ function sanitizeGlobal(raw: unknown): GlobalUI | null {
 	if (termTabs.length === 0) termTabs.push("powershell");
 	const branches = asStrArr(r.branches, 20, 64) ?? [...GLOBAL_DEFAULTS.branches];
 	const activeTermRaw = typeof r.activeTerm === "number" ? r.activeTerm : 0;
+	let layout: PersistedLayout | null = null;
+	try {
+		layout = sanitizePersistedLayout(r.layout);
+	} catch {
+		layout = null;
+	}
 	return {
 		sidebar: asBool(r.sidebar, GLOBAL_DEFAULTS.sidebar),
 		sidebarW: asNum(r.sidebarW, 180, 480, GLOBAL_DEFAULTS.sidebarW),
-		showPreview: asBool(r.showPreview, GLOBAL_DEFAULTS.showPreview),
 		autoReload: asBool(r.autoReload, GLOBAL_DEFAULTS.autoReload),
 		minimapOn: asBool(r.minimapOn, GLOBAL_DEFAULTS.minimapOn),
 		fontSize: asNum(r.fontSize, 11, 18, GLOBAL_DEFAULTS.fontSize),
 		showPanel: asBool(r.showPanel, GLOBAL_DEFAULTS.showPanel),
 		panelH: asNum(r.panelH, 100, 520, GLOBAL_DEFAULTS.panelH),
 		panelMax: asBool(r.panelMax, GLOBAL_DEFAULTS.panelMax),
-		editorPct: asNum(r.editorPct, 15, 85, GLOBAL_DEFAULTS.editorPct),
-		previewZoomed: asBool(r.previewZoomed, GLOBAL_DEFAULTS.previewZoomed),
 		winMax: asBool(r.winMax, GLOBAL_DEFAULTS.winMax),
 		openEditorsOpen: asBool(r.openEditorsOpen, GLOBAL_DEFAULTS.openEditorsOpen),
 		outlineOpen: asBool(r.outlineOpen, GLOBAL_DEFAULTS.outlineOpen),
@@ -151,6 +155,11 @@ function sanitizeGlobal(raw: unknown): GlobalUI | null {
 		searchCase: asBool(r.searchCase, false),
 		searchWord: asBool(r.searchWord, false),
 		searchRegex: asBool(r.searchRegex, false),
+		layout,
+		// Deprecated fields preserved for migration in IdeState.
+		showPreview: typeof r.showPreview === "boolean" ? r.showPreview : undefined,
+		editorPct: typeof r.editorPct === "number" ? r.editorPct : undefined,
+		previewZoomed: typeof r.previewZoomed === "boolean" ? r.previewZoomed : undefined,
 	};
 }
 

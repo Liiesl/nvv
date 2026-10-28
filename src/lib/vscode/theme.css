@@ -1838,6 +1838,8 @@ button.veil {
 .tabsbar .tabs {
 	background: transparent;
 	scrollbar-width: thin;
+	overflow-y: hidden;
+	scrollbar-gutter: stable;
 }
 .tab {
 	background: #2d2d2d;
@@ -1863,28 +1865,36 @@ button.veil {
 	position: relative;
 }
 .tab .dirtydot {
-	display: none;
+	visibility: hidden;
 	color: #fff;
 	font-size: 10px;
 	padding-left: 2px;
 }
 .tab.dirty .dirtydot {
-	display: inline;
+	visibility: visible;
 }
 .tab.dirty .x {
-	display: none;
+	visibility: hidden;
+	opacity: 0;
 }
 .tab.dirty:hover .dirtydot {
-	display: none;
+	visibility: hidden;
 }
 .tab.dirty:hover .x {
+	visibility: visible;
+	opacity: 1;
 	display: inline-flex;
 }
 .tab .x {
-	display: none;
+	visibility: hidden;
+	opacity: 0;
+	width: 22px;
+	flex: 0 0 auto;
 }
 .tab:hover .x,
 .tab.on .x {
+	visibility: visible;
+	opacity: 1;
 	display: inline-flex;
 }
 .newtab {
@@ -2369,7 +2379,12 @@ button.veil.up {
 .side-body,
 .panelbody,
 .opts,
-.symmenu {
+.symmenu,
+.tabs,
+.tile-root,
+.tile-split,
+.egroup-body,
+.dropgrid {
 	scrollbar-width: thin;
 	scrollbar-color: #424242 transparent;
 }
@@ -2460,4 +2475,77 @@ button.veil.up {
 .opt.newproj {
 	display: inline-flex;
 	align-items: center;
+}
+/* ---- editor tiling (docked groups + preview-as-tab) ---- */
+.tile-root {
+	flex: 1;
+	display: flex;
+	min-height: 0;
+	min-width: 0;
+	background: var(--vs-bg);
+}
+.tile-split {
+	display: flex;
+	flex: 1;
+	min-height: 0;
+	min-width: 0;
+}
+.tile-split.row {
+	flex-direction: row;
+}
+.tile-split.col {
+	flex-direction: column;
+}
+.tile-child {
+	display: flex;
+	min-height: 0;
+	min-width: 0;
+}
+.tile-leaf {
+	display: flex;
+	flex: 1;
+	min-height: 0;
+	min-width: 0;
+	border-right: 1px solid var(--vs-border);
+}
+.tile-leaf:last-child {
+	border-right: none;
+}
+.tile-split.col > .tile-child {
+	border-bottom: 1px solid var(--vs-border);
+}
+.tile-split.col > .tile-child:last-child {
+	border-bottom: none;
+}
+.tile-sash {
+	flex: 0 0 5px;
+	background: transparent;
+	touch-action: none;
+	user-select: none;
+	z-index: 30;
+}
+.tile-sash.row {
+	cursor: col-resize;
+}
+.tile-sash.col {
+	cursor: row-resize;
+}
+.tile-sash:hover,
+.tile-sash.drag {
+	background: var(--vs-accent2);
+}
+.egroup {
+	border-left: 1px solid transparent;
+}
+.egroup.focused {
+	border-left-color: transparent;
+}
+.egroup.focused .tabsbar {
+	outline: 1px solid transparent;
+}
+.ide.group-maximized .tile-root {
+	background: var(--vs-bg);
+}
+.main {
+	min-height: 0;
 }

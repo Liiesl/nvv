@@ -35,8 +35,8 @@
 	let failed = $state("");
 	let ready = $state(false);
 	let currentPath = "";
+	const instanceUid = `${Date.now().toString(36)}-${Math.floor(Math.random() * 1e9).toString(36)}`;
 	const viewStates = new Map<string, monacoNs.editor.ICodeEditorViewState | null>();
-	let ro: ResizeObserver | null = null;
 	let decorIds: string[] = [];
 
 	function clearInspectDecorations() {
@@ -103,6 +103,14 @@
 
 	function applyInspectTarget(target: InspectPayload | null) {
 		if (!editor || !monacoInstance || !model) return;
+		try {
+			if (model.isDisposed()) {
+				model = null;
+				return;
+			}
+		} catch {
+			return;
+		}
 		clearInspectDecorations();
 		if (!target) return;
 		try {
@@ -162,19 +170,16 @@
 		contentSub = null;
 		if (model) {
 			try {
-				model.dispose();
+				if (!model.isDisposed()) model.dispose();
 			} catch {
 				/* noop */
 			}
 			model = null;
 		}
-		const uri = m.Uri.parse("inmemory://" + p);
-		try {
-			const existing = m.editor.getModel(uri);
-			if (existing) existing.dispose();
-		} catch {
-			/* noop */
-		}
+		// Per-instance URI: split groups can open the same file.
+		// A shared inmemory://<path> URI would let one editor dispose the
+		// model still referenced by another group (Model is disposed!).
+		const uri = m.Uri.parse("inmemory://m-" + instanceUid + p);
 		const next = m.editor.createModel(value ?? "", languageOf(p), uri);
 		contentSub = next.onDidChangeContent(() => {
 			try {
@@ -210,7 +215,7 @@
 						renderCharacters: false,
 						maxColumn: 80,
 					},
-					automaticLayout: false,
+					automaticLayout: true,
 					scrollBeyondLastLine: false,
 					padding: { top: 10 },
 					renderLineHighlight: "all",
@@ -232,15 +237,6 @@
 					handleUserTakeover();
 				});
 				setModel(path, content);
-				const ed = editor;
-				ro = new ResizeObserver(() => {
-					try {
-						ed.layout();
-					} catch {
-						/* noop */
-					}
-				});
-				if (host) ro.observe(host);
 				ready = true;
 			} catch {
 				failed = "Monaco failed to load. Check console.";
@@ -248,11 +244,6 @@
 		})();
 		return () => {
 			dead = true;
-			try {
-				ro?.disconnect();
-			} catch {
-				/* noop */
-			}
 		};
 	});
 
@@ -268,15 +259,28 @@
 			if (inspectTarget) applyInspectTarget(inspectTarget);
 		} else {
 			const cur = model;
-			if (cur && cur.getValue() !== v) {
+			if (cur) {
+				let curText: string | null = null;
 				try {
-					cur.pushEditOperations(
-						[],
-						[{ range: cur.getFullModelRange(), text: v ?? "" }],
-						() => null,
-					);
+					if (cur.isDisposed()) {
+						model = null;
+						setModel(p, v);
+						return;
+					}
+					curText = cur.getValue();
 				} catch {
-					/* noop */
+					curText = null;
+				}
+				if (curText !== null && curText !== v) {
+					try {
+						cur.pushEditOperations(
+							[],
+							[{ range: cur.getFullModelRange(), text: v ?? "" }],
+							() => null,
+						);
+					} catch {
+						/* noop */
+					}
 				}
 				// File changed under a pinned highlight: re-resolve so the
 				// decoration tracks the edit or clears if the node is gone.
@@ -329,11 +333,6 @@
 		}
 		try {
 			editor?.dispose();
-		} catch {
-			/* noop */
-		}
-		try {
-			ro?.disconnect();
 		} catch {
 			/* noop */
 		}

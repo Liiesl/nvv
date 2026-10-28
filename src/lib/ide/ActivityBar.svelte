@@ -86,10 +86,10 @@
 		}}><Icon name="extensions" size={22} /></button
 	>
 	<button
-		class:on={ide.showPreview}
-		title="Toggle preview"
-		aria-label="Toggle preview"
-		onclick={() => (ide.showPreview = !ide.showPreview)}><Icon name="browser" size={22} /></button
+		class:on={ide.hasPreviewOpen}
+		title="Toggle preview tab"
+		aria-label="Toggle preview tab"
+		onclick={() => ide.togglePreviewTab()}><Icon name="browser" size={22} /></button
 	>
 	<div class="sp"></div>
 	<div class="actwrap">
