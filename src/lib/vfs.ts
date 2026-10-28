@@ -175,39 +175,52 @@ function seedMap(): Record<string, VNode> {
 	return m;
 }
 
+export function seedFileMap(): Record<string, VNode> {
+	return seedMap();
+}
+
+export function blankFileMap(): Record<string, VNode> {
+	const now = Date.now();
+	return {
+		'/': { path: '/', type: 'dir', content: '', mtime: now },
+		'/index.html': {
+			path: '/index.html',
+			type: 'file',
+			mtime: now,
+			content: `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Blank project</title>
+</head>
+<body>
+  <h1>Blank project</h1>
+</body>
+</html>
+`
+		}
+	};
+}
+
+export function cloneFileMap(src: Record<string, VNode>): Record<string, VNode> {
+	const out: Record<string, VNode> = {};
+	for (const [k, v] of Object.entries(src)) out[k] = { ...v };
+	if (!out['/']) out['/'] = { path: '/', type: 'dir', content: '', mtime: Date.now() };
+	return out;
+}
+
 function loadInitial(): Record<string, VNode> {
-	try {
-		if (typeof localStorage === 'undefined') return seedMap();
-		const raw = localStorage.getItem(LS_KEY);
-		if (!raw) return seedMap();
-		const parsed = JSON.parse(raw) as Record<string, VNode>;
-		if (!parsed['/index.html']) return seedMap();
-		if (!parsed['/']) parsed['/'] = { path: '/', type: 'dir', content: '', mtime: Date.now() };
-		return parsed;
-	} catch {
-		return seedMap();
-	}
+	// Active-project content is loaded by projects.ts after init.
+	// Keep SSR/initial render deterministic: start from seed.
+	// Migration from the legacy single-workspace key happens in projects.ts.
+	return seedMap();
 }
 
 export const files = writable<Record<string, VNode>>(loadInitial());
 export const activePath = writable<string>('/index.html');
 export const openTabs = writable<string[]>(['/index.html']);
 export const dirtyPaths = writable<Set<string>>(new Set());
-
-let saveT: ReturnType<typeof setTimeout> | null = null;
-function scheduleSave() {
-	if (typeof localStorage === 'undefined') return;
-	if (saveT) clearTimeout(saveT);
-	saveT = setTimeout(() => {
-		try {
-			localStorage.setItem(LS_KEY, JSON.stringify(get(files)));
-			dirtyPaths.set(new Set());
-		} catch {
-			/* quota exceeded: keep in-memory */
-		}
-	}, 400);
-}
-files.subscribe(() => scheduleSave());
 
 export function ensureDir(path: string) {
 	path = normalize(path);
@@ -311,14 +324,11 @@ export function closeTab(path: string) {
 }
 
 export function resetWorkspace() {
+	// Per-project reset: only resets the active working set.
+	// Persistence is owned by projects.ts (subscribed to these stores).
 	files.set(seedMap());
 	openTabs.set(['/index.html']);
 	activePath.set('/index.html');
-	try {
-		localStorage.removeItem(LS_KEY);
-	} catch {
-		/* noop */
-	}
 }
 
 export interface TreeNode {
