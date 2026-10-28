@@ -41,6 +41,13 @@ import {
 import type { ProjectMeta } from "#lib/projects.js";
 import type { TemplateKind } from "#lib/projects.js";
 import type { InspectPayload } from "#lib/inspect.js";
+import {
+	loadGlobalUI,
+	saveGlobalUI,
+	loadProjectsUIMap,
+	saveProjectsUIMap,
+	type ProjectUI,
+} from "#lib/ide/ui-persist.js";
 
 export type SideView = "explorer" | "search" | "scm" | "debug" | "ext" | "settings";
 export type PanelTab = "console" | "output" | "problems" | "terminal";
@@ -130,6 +137,8 @@ export class IdeState {
 	termTabs = $state<string[]>(["powershell"]);
 	activeTerm = $state(0);
 	openEditorsOpen = $state(true);
+	expandedDirs = $state<string[]>(["/"]);
+	uiReady = $state(false);
 	searchCase = $state(false);
 	searchWord = $state(false);
 	searchRegex = $state(false);
@@ -142,6 +151,9 @@ export class IdeState {
 	toastSeq = 0;
 	private unsubs: (() => void)[] = [];
 	private didInit = false;
+	private projectsUIMap: Record<string, ProjectUI> = {};
+	private uiSaveT: ReturnType<typeof setTimeout> | null = null;
+	private projSaveT: ReturnType<typeof setTimeout> | null = null;
 
 	constructor() {
 		// Subscribe immediately — safe on server (seed data) and client (live data).
@@ -160,6 +172,7 @@ export class IdeState {
 		if (this.didInit) return;
 		this.didInit = true;
 		initProjects();
+		this.loadPersistedUI();
 	}
 
 	dispose() {
@@ -425,6 +438,162 @@ export class IdeState {
 		return list.filter((l) => (l.kind + " " + l.text).toLowerCase().includes(f)).slice(-120);
 	}
 
+	// ---------- ui persistence (hybrid: global layout + per-project view) ----------
+	loadPersistedUI() {
+		if (typeof window === "undefined") return;
+		try {
+			const g = loadGlobalUI();
+			if (g) {
+				this.sidebar = g.sidebar;
+				this.sidebarW = g.sidebarW;
+				this.showPreview = g.showPreview;
+				this.autoReload = g.autoReload;
+				this.minimapOn = g.minimapOn;
+				this.fontSize = g.fontSize;
+				this.showPanel = g.showPanel;
+				this.panelH = g.panelH;
+				this.panelMax = g.panelMax;
+				this.editorPct = g.editorPct;
+				this.previewZoomed = g.previewZoomed;
+				this.winMax = g.winMax;
+				this.openEditorsOpen = g.openEditorsOpen;
+				this.outlineOpen = g.outlineOpen;
+				this.timelineOpen = g.timelineOpen;
+				this.useSpaces = g.useSpaces;
+				this.indentSize = g.indentSize;
+				this.encoding = g.encoding;
+				this.eol = g.eol;
+				this.outputChannel = g.outputChannel;
+				this.termTabs = [...g.termTabs];
+				this.activeTerm = g.activeTerm;
+				this.currentBranch = g.currentBranch;
+				this.branches = [...g.branches];
+				this.searchCase = g.searchCase;
+				this.searchWord = g.searchWord;
+				this.searchRegex = g.searchRegex;
+			}
+			this.projectsUIMap = loadProjectsUIMap();
+			this.applyProjectUI(this.activeProjectIdSnap);
+		} catch {
+			/* corrupted UI prefs: keep defaults */
+		} finally {
+			this.uiReady = true;
+		}
+	}
+
+	applyProjectUI(id: string | null) {
+		if (!id) return;
+		const saved = this.projectsUIMap[id];
+		if (saved) {
+			this.sideView = saved.sideView;
+			this.panelTab = saved.panelTab;
+			const known = new Set(
+				Object.values(this.filesSnap)
+					.filter((n) => n.type === "dir")
+					.map((n) => n.path),
+			);
+			known.add("/");
+			const pruned = saved.expandedDirs.filter((p) => known.has(p)).slice(0, 200);
+			if (!pruned.includes("/")) pruned.unshift("/");
+			this.expandedDirs = pruned.length ? pruned : ["/"];
+		} else {
+			this.sideView = "explorer";
+			this.panelTab = "console";
+			this.expandedDirs = ["/"];
+		}
+	}
+
+	snapshotGlobal() {
+		return {
+			sidebar: this.sidebar,
+			sidebarW: this.sidebarW,
+			showPreview: this.showPreview,
+			autoReload: this.autoReload,
+			minimapOn: this.minimapOn,
+			fontSize: this.fontSize,
+			showPanel: this.showPanel,
+			panelH: this.panelH,
+			panelMax: this.panelMax,
+			editorPct: this.editorPct,
+			previewZoomed: this.previewZoomed,
+			winMax: this.winMax,
+			openEditorsOpen: this.openEditorsOpen,
+			outlineOpen: this.outlineOpen,
+			timelineOpen: this.timelineOpen,
+			useSpaces: this.useSpaces,
+			indentSize: this.indentSize,
+			encoding: this.encoding,
+			eol: this.eol,
+			outputChannel: this.outputChannel,
+			termTabs: [...this.termTabs],
+			activeTerm: this.activeTerm,
+			currentBranch: this.currentBranch,
+			branches: [...this.branches],
+			searchCase: this.searchCase,
+			searchWord: this.searchWord,
+			searchRegex: this.searchRegex,
+		};
+	}
+
+	snapshotProject(): ProjectUI {
+		return {
+			sideView: this.sideView,
+			panelTab: this.panelTab,
+			expandedDirs: [...this.expandedDirs].slice(0, 200),
+		};
+	}
+
+	queueSaveGlobal() {
+		if (!this.uiReady || typeof window === "undefined") return;
+		if (this.uiSaveT) clearTimeout(this.uiSaveT);
+		this.uiSaveT = setTimeout(() => {
+			this.uiSaveT = null;
+			try {
+				saveGlobalUI(this.snapshotGlobal());
+			} catch {
+				/* noop */
+			}
+		}, 250);
+	}
+
+	queueSaveProjects() {
+		if (!this.uiReady || typeof window === "undefined") return;
+		const id = this.activeProjectIdSnap;
+		if (!id) return;
+		if (this.projSaveT) clearTimeout(this.projSaveT);
+		this.projSaveT = setTimeout(() => {
+			this.projSaveT = null;
+			try {
+				this.projectsUIMap[id] = this.snapshotProject();
+				saveProjectsUIMap(this.projectsUIMap);
+			} catch {
+				/* noop */
+			}
+		}, 250);
+	}
+
+	flushUI() {
+		if (!this.uiReady || typeof window === "undefined") return;
+		try {
+			if (this.uiSaveT) {
+				clearTimeout(this.uiSaveT);
+				this.uiSaveT = null;
+			}
+			if (this.projSaveT) {
+				clearTimeout(this.projSaveT);
+				this.projSaveT = null;
+			}
+			saveGlobalUI(this.snapshotGlobal());
+			const id = this.activeProjectIdSnap;
+			if (id) {
+				this.projectsUIMap[id] = this.snapshotProject();
+				saveProjectsUIMap(this.projectsUIMap);
+			}
+		} catch {
+			/* noop */
+		}
+	}
+
 	// ---------- actions ----------
 	toast(text: string, kind = "info") {
 		this.toastSeq += 1;
@@ -516,7 +685,10 @@ export class IdeState {
 	}
 
 	confirmNewProject() {
-		createProject(this.newProjName.trim() || defaultProjectName(), this.newProjTemplate);
+		this.flushUI();
+		const id = createProject(this.newProjName.trim() || defaultProjectName(), this.newProjTemplate);
+		this.applyProjectUI(id);
+		this.queueSaveProjects();
 		this.showNewProj = false;
 		this.toast(`Project “${this.newProjName.trim() || "untitled"}” created`);
 	}
@@ -534,7 +706,9 @@ export class IdeState {
 	}
 
 	doSwitchProject(id: string) {
+		this.flushUI();
 		switchProject(id);
+		this.applyProjectUI(id);
 		this.projMenu = false;
 		this.palette = false;
 		this.toast("Project switched");
@@ -542,7 +716,15 @@ export class IdeState {
 
 	doDeleteProject(id: string, name: string) {
 		if (!confirm(`Delete project "${name}"? This cannot be undone.`)) return;
+		this.flushUI();
+		delete this.projectsUIMap[id];
+		try {
+			saveProjectsUIMap(this.projectsUIMap);
+		} catch {
+			/* noop */
+		}
 		deleteProject(id);
+		this.applyProjectUI(this.activeProjectIdSnap);
 		this.projMenu = false;
 		this.toast(`Deleted “${name}”`, "warn");
 	}
@@ -737,10 +919,28 @@ export class IdeState {
 		renamePath(a, b);
 	}
 	clearAllProjects() {
+		this.flushUI();
+		this.projectsUIMap = {};
+		try {
+			saveProjectsUIMap(this.projectsUIMap);
+		} catch {
+			/* noop */
+		}
 		clearAllProjects();
 	}
 	duplicateProject(id: string) {
-		duplicateProject(id);
+		this.flushUI();
+		const nid = duplicateProject(id);
+		if (nid) {
+			const src = this.projectsUIMap[id] ?? this.snapshotProject();
+			this.projectsUIMap[nid] = { ...src, expandedDirs: [...src.expandedDirs] };
+			try {
+				saveProjectsUIMap(this.projectsUIMap);
+			} catch {
+				/* noop */
+			}
+			this.applyProjectUI(nid);
+		}
 		this.projMenu = false;
 	}
 }

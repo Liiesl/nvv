@@ -22,6 +22,24 @@
 
 	onMount(() => {
 		ide.init();
+		const flush = () => ide.flushUI();
+		window.addEventListener("beforeunload", flush);
+		return () => window.removeEventListener("beforeunload", flush);
+	});
+
+	// Autosave global layout prefs (debounced inside ide).
+	$effect(() => {
+		void ide.snapshotGlobal();
+		ide.queueSaveGlobal();
+	});
+
+	// Autosave per-project view prefs (sideView / panelTab / expanded folders).
+	$effect(() => {
+		const pid = ide.activeProjectIdSnap;
+		void ide.sideView;
+		void ide.panelTab;
+		void ide.expandedDirs;
+		if (pid) ide.queueSaveProjects();
 	});
 
 	if (browser) {

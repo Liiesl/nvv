@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { buildTree, basename, type VNode } from "#lib/vfs.js";
+	import { ide } from "#lib/ide/ide.svelte.js";
 	import Icon from "./Icon.svelte";
 	import FileIcon from "./FileIcon.svelte";
 
@@ -23,7 +24,6 @@
 		collapseNonce?: number;
 	} = $props();
 
-	let expanded = $state<Set<string>>(new Set(["/"]));
 	let creating = $state<{ dir: string; kind: "file" | "dir" } | null>(null);
 	let renaming = $state<string | null>(null);
 	let draft = $state("");
@@ -35,19 +35,27 @@
 	} | null>(null);
 
 	const tree = $derived(buildTree(files));
+	const expanded = $derived(new Set(ide.expandedDirs));
+
+	function setExpanded(list: string[]) {
+		const uniq = [...new Set(list.filter((p) => typeof p === "string" && p.startsWith("/")))];
+		if (!uniq.includes("/")) uniq.unshift("/");
+		ide.expandedDirs = uniq.slice(0, 200);
+	}
 
 	$effect(() => {
 		void collapseNonce;
-		if (collapseNonce > 0) expanded = new Set(["/"]);
+		if (collapseNonce > 0) ide.expandedDirs = ["/"];
 	});
 
 	// Keep active file's parents expanded (VS Code reveal behavior).
 	$effect(() => {
 		const a = active;
 		if (!a) return;
+		void ide.expandedDirs;
 		const parts = a.split("/").filter(Boolean);
 		let acc = "";
-		const next = new Set(expanded);
+		const next = new Set(ide.expandedDirs);
 		let changed = false;
 		for (let i = 0; i < parts.length - 1; i++) {
 			acc += "/" + parts[i];
@@ -60,19 +68,19 @@
 			next.add("/");
 			changed = true;
 		}
-		if (changed) expanded = next;
+		if (changed) setExpanded([...next]);
 	});
 
 	function toggle(p: string) {
-		const n = new Set(expanded);
+		const n = new Set(ide.expandedDirs);
 		if (n.has(p)) n.delete(p);
 		else n.add(p);
-		expanded = n;
+		setExpanded([...n]);
 	}
 	function startCreate(dir: string, kind: "file" | "dir") {
-		const n = new Set(expanded);
+		const n = new Set(ide.expandedDirs);
 		n.add(dir);
-		expanded = n;
+		setExpanded([...n]);
 		creating = { dir, kind };
 		draft = "";
 	}
