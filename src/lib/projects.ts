@@ -133,6 +133,17 @@ function schedulePersist() {
 	}, 400);
 }
 
+function notifyPreview(id: string) {
+	try {
+		if (typeof BroadcastChannel === 'undefined') return;
+		const ch = new BroadcastChannel('neverview:preview');
+		ch.postMessage({ projectId: id, rev: Date.now() });
+		ch.close();
+	} catch {
+		/* noop */
+	}
+}
+
 function persistCurrentSync() {
 	const id = get(activeProjectId);
 	if (!id) return;
@@ -141,6 +152,7 @@ function persistCurrentSync() {
 	const snapActive = get(activePath);
 	const entry = get(activeEntry);
 	writeBlobSync(id, { files: snapFiles, openTabs: snapTabs, activePath: snapActive });
+	notifyPreview(id);
 	dirtyPaths.set(new Set());
 	const metas = get(projects);
 	const i = metas.findIndex((m) => m.id === id);
@@ -274,6 +286,7 @@ export function setProjectEntry(entry: string) {
 		writeIndex(next);
 	}
 	schedulePersist();
+	notifyPreview(id);
 }
 
 export function createProject(name: string, template: TemplateKind = 'seed'): string {
@@ -318,6 +331,7 @@ export function renameProject(id: string, name: string) {
 	next[i] = { ...next[i], name: clean, updatedAt: Date.now() };
 	projects.set(next);
 	writeIndex(next);
+	notifyPreview(id);
 }
 
 export function duplicateProject(id: string): string | null {

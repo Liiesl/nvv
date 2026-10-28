@@ -668,6 +668,7 @@
                             <Preview
                                 files={filesSnap}
                                 {entry}
+                                projectId={activeProjectIdSnap}
                                 auto={autoReload}
                                 {onLog}
                                 zoomed={previewZoomed}

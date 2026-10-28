@@ -7,6 +7,7 @@
     let {
         files,
         entry = "/index.html",
+        projectId = null,
         auto = true,
         onLog,
         zoomed = false,
@@ -14,6 +15,7 @@
     }: {
         files: Record<string, VNode>;
         entry: string;
+        projectId: string | null;
         auto: boolean;
         onLog: (kind: string, text: string) => void;
         zoomed?: boolean;
@@ -71,6 +73,16 @@
         rebuild();
     }
     export function openNewTab() {
+        try {
+            const target = new URL("preview", window.location.href);
+            if (projectId) target.searchParams.set("project", projectId);
+            if (entry) target.searchParams.set("entry", entry);
+            target.searchParams.set("live", "1");
+            window.open(target.toString(), "_blank", "noopener");
+            return;
+        } catch {
+            /* fall through to blob snapshot */
+        }
         if (built) window.open(built.entryUrl, "_blank", "noopener");
     }
 </script>
