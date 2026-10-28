@@ -107,6 +107,29 @@
 	let toasts = $state<{ id: number; text: string; kind: string }[]>([]);
 	let dragTab = $state<string | null>(null);
 	let toastSeq = 0;
+	let currentBranch = $state("main");
+	let branches = $state(["main", "dev", "feature/preview"]);
+	let branchMenu = $state(false);
+	let useSpaces = $state(true);
+	let indentSize = $state(2);
+	let indentMenu = $state(false);
+	let encoding = $state("UTF-8");
+	let encodingMenu = $state(false);
+	let eol = $state("LF");
+	let eolMenu = $state(false);
+	let settingsMenu = $state(false);
+	let accountsMenu = $state(false);
+	let notifCenter = $state(false);
+	let outputChannel = $state("Preview");
+	let termTabs = $state<string[]>(["powershell"]);
+	let activeTerm = $state(0);
+	let openEditorsOpen = $state(true);
+	let searchCase = $state(false);
+	let searchWord = $state(false);
+	let searchRegex = $state(false);
+	let crumbSymMenu = $state(false);
+	let layoutMenu = $state(false);
+	let winMax = $state(false);
 	let previewRef = $state<{
 		refresh: () => void;
 		openNewTab: () => void;
@@ -121,6 +144,31 @@
 		setTimeout(() => {
 			toasts = toasts.filter((t) => t.id !== id);
 		}, 3400);
+	}
+
+	function hiMatch(label: string, q: string): { pre: string; mid: string; post: string } {
+		if (!q) return { pre: label, mid: "", post: "" };
+		const i = label.toLowerCase().indexOf(q.toLowerCase().slice(0, 32));
+		if (i < 0) return { pre: label, mid: "", post: "" };
+		const len = Math.min(q.length, 32);
+		return { pre: label.slice(0, i), mid: label.slice(i, i + len), post: label.slice(i + len) };
+	}
+
+	function closeAllMenus() {
+		titleMenu = null;
+		projMenu = false;
+		sideMenu = false;
+		tabCtx = null;
+		editorCtx = null;
+		settingsMenu = false;
+		accountsMenu = false;
+		notifCenter = false;
+		branchMenu = false;
+		indentMenu = false;
+		encodingMenu = false;
+		eolMenu = false;
+		crumbSymMenu = false;
+		layoutMenu = false;
 	}
 
 	function handleInspectSelect(info: import("#lib/inspect.js").InspectPayload | null) {
@@ -238,14 +286,39 @@
 		return acc;
 	});
 	const searchDetailed = $derived.by(() => {
-		const q = query.trim().toLowerCase();
-		if (!q) return [] as { path: string; line: number; text: string }[];
+		const raw = query.trim();
+		if (!raw) return [] as { path: string; line: number; text: string }[];
 		const hits: { path: string; line: number; text: string }[] = [];
+		let re: RegExp | null = null;
+		if (searchRegex) {
+			try {
+				re = new RegExp(raw, searchCase ? "g" : "gi");
+			} catch {
+				re = null;
+			}
+		}
+		const q = searchCase ? raw : raw.toLowerCase();
 		for (const [p, n] of Object.entries(filesSnap)) {
 			if (n.type !== "file") continue;
 			const lines = n.content.split("\n");
 			for (let i = 0; i < lines.length && hits.length < 60; i++) {
-				if (lines[i].toLowerCase().includes(q)) {
+				const ln = lines[i];
+				let ok = false;
+				if (re) {
+					re.lastIndex = 0;
+					ok = re.test(ln);
+				} else {
+					const hay = searchCase ? ln : ln.toLowerCase();
+					if (searchWord) {
+						ok = new RegExp(
+							`\\b${q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`,
+							searchCase ? "" : "i",
+						).test(ln);
+					} else {
+						ok = hay.includes(q);
+					}
+				}
+				if (ok) {
 					hits.push({
 						path: p,
 						line: i + 1,
@@ -268,6 +341,15 @@
 					filesSnap[p].type === "file" &&
 					p.toLowerCase().includes(paletteIsCmd ? "" : paletteQ.toLowerCase()),
 			)
+			.sort((a, b) => {
+				// MRU: open tabs first, then alphabetical — like VS Code quick open
+				const ai = tabs.indexOf(a);
+				const bi = tabs.indexOf(b);
+				if (ai >= 0 && bi >= 0) return ai - bi;
+				if (ai >= 0) return -1;
+				if (bi >= 0) return 1;
+				return a.localeCompare(b);
+			})
 			.slice(0, paletteIsCmd ? 5 : 12),
 	);
 	const allCommands = $derived.by(() => {
@@ -632,6 +714,28 @@
 				sideView = k === "e" ? "explorer" : k === "f" ? "search" : "scm";
 				sidebar = true;
 			}
+			if (mod && e.key.toLowerCase() === "w") {
+				e.preventDefault();
+				if (active) closeTab(active);
+			}
+			if (mod && e.key === "Tab") {
+				e.preventDefault();
+				if (tabs.length > 1) {
+					const i = tabs.indexOf(active);
+					const n = e.shiftKey ? (i - 1 + tabs.length) % tabs.length : (i + 1) % tabs.length;
+					openFile(tabs[n]);
+				}
+			}
+			if (e.key === "F1") {
+				e.preventDefault();
+				paletteQ = "> ";
+				palette = true;
+			}
+			if (mod && e.key.toLowerCase() === "g" && !e.shiftKey) {
+				e.preventDefault();
+				gotoDraft = String(line);
+				gotoOpen = true;
+			}
 			if (e.key === "F5" && !e.shiftKey) {
 				// keep native reload out of the way inside editor context
 			}
@@ -641,8 +745,9 @@
 				else if (tabCtx) tabCtx = null;
 				else if (editorCtx) editorCtx = null;
 				else if (titleMenu) titleMenu = null;
-				else if (previewZoomed) previewZoomed = false;
-				else palette = false;
+				else closeAllMenus();
+				if (previewZoomed && e.key === "Escape") previewZoomed = false;
+				if (!gotoOpen && !langPick && !tabCtx && !editorCtx && !titleMenu) palette = false;
 			}
 		});
 		window.addEventListener("pointermove", (e) => {
@@ -666,18 +771,27 @@
 
 {#if browser}
 	<div class="ide" class:preview-zoomed={previewZoomed} class:has-error={errCount > 0}>
-		<div class="titlebar">
-			<div class="dots">
-				<span style="background:#ff5f57"></span><span style="background:#febc2e"></span><span
-					style="background:#28c840"
-				></span>
+		<div class="titlebar" data-tauri-drag-region>
+			<div class="appicon" title="Neverview v2 — VS Code-like" aria-hidden="true">
+				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"
+					><path
+						fill="#23A9F2"
+						d="M17.5 3 3.8 10.2c-.4.3-.4.9 0 1.2l3.4 2.1 2.2-2.2 2.1 2.1 2.1-2.1 2.1 2.1 5.8-3.6c.6-.4.6-1.2 0-1.6L17.5 3Z"
+					/><path
+						fill="#007ACC"
+						d="m9.4 12.4-2.2 2.2 10.3 6.4c.6.4 1.4 0 1.4-.8V4.6L9.4 12.4Z"
+					/></svg
+				>
 			</div>
 			<div class="menu">
-				{#each ["File", "Edit", "View", "Run", "Help"] as m}
+				{#each ["File", "Edit", "Selection", "View", "Go", "Run", "Terminal", "Help"] as m}
 					<button
 						type="button"
 						class="menubtn"
 						class:on={titleMenu === m}
+						onmouseenter={() => {
+							if (titleMenu && titleMenu !== m) titleMenu = m;
+						}}
 						onclick={() => (titleMenu = titleMenu === m ? null : m)}>{m}</button
 					>
 				{/each}
@@ -696,32 +810,39 @@
 								onclick={() => {
 									doCreateFile("/", "untitled.html");
 									titleMenu = null;
-								}}>New File <small>Ctrl+N</small></button
+								}}><span>New File…</span> <small>Ctrl+N</small></button
 							>
 							<button
 								onclick={() => {
 									openNewProjectDialog();
 									titleMenu = null;
-								}}>New Project…</button
+								}}><span>New Project…</span></button
 							>
 							<div class="sep"></div>
 							<button
 								onclick={() => {
 									if (active) closeTab(active);
 									titleMenu = null;
-								}}>Close Tab</button
+								}}><span>Close Tab</span> <small>Ctrl+W</small></button
 							>
 							<button
 								onclick={() => {
 									if (active) closeOthers(active);
 									titleMenu = null;
-								}}>Close Others</button
+								}}><span>Close Others</span></button
 							>
 							<button
 								onclick={() => {
 									closeAll();
 									titleMenu = null;
-								}}>Close All</button
+								}}><span>Close All</span></button
+							>
+							<div class="sep"></div>
+							<button
+								onclick={() => {
+									toast("Workspace autosaves to localStorage");
+									titleMenu = null;
+								}}><span>✓ Auto Save</span></button
 							>
 						{:else if titleMenu === "Edit"}
 							<button
@@ -729,51 +850,105 @@
 									paletteQ = "> ";
 									palette = true;
 									titleMenu = null;
-								}}>Command Palette… <small>Ctrl+Shift+P</small></button
+								}}><span>Command Palette…</span> <small>Ctrl+Shift+P</small></button
 							>
 							<button
 								onclick={() => {
 									gotoDraft = String(line);
 									gotoOpen = true;
 									titleMenu = null;
-								}}>Go to Line… <small>Ctrl+G</small></button
+								}}><span>Go to Line…</span> <small>Ctrl+G</small></button
 							>
 							<button
 								onclick={() => {
 									langPick = true;
 									titleMenu = null;
-								}}>Change Language Mode</button
+								}}><span>Change Language Mode</span></button
+							>
+						{:else if titleMenu === "Selection"}
+							<button
+								onclick={() => {
+									toast("Select All — use editor (Ctrl+A)");
+									titleMenu = null;
+								}}><span>Select All</span> <small>Ctrl+A</small></button
+							>
+							<button
+								onclick={() => {
+									query = basename(active ?? "");
+									sideView = "search";
+									sidebar = true;
+									titleMenu = null;
+								}}><span>Find in Files</span> <small>Ctrl+Shift+F</small></button
+							>
+							<button
+								onclick={() => {
+									replaceQ = "";
+									sideView = "search";
+									sidebar = true;
+									titleMenu = null;
+								}}><span>Replace in Files</span> <small>Ctrl+Shift+H</small></button
 							>
 						{:else if titleMenu === "View"}
 							<button
 								onclick={() => {
 									sidebar = !sidebar;
 									titleMenu = null;
-								}}>Toggle Primary Side Bar <small>Ctrl+B</small></button
+								}}><span>{sidebar ? "✓" : "○"} Primary Side Bar</span> <small>Ctrl+B</small></button
 							>
 							<button
 								onclick={() => {
 									showPanel = !showPanel;
 									titleMenu = null;
-								}}>Toggle Panel <small>Ctrl+J</small></button
+								}}><span>{showPanel ? "✓" : "○"} Panel</span> <small>Ctrl+J</small></button
 							>
 							<button
 								onclick={() => {
 									showPreview = !showPreview;
 									titleMenu = null;
-								}}>Toggle Preview</button
+								}}><span>{showPreview ? "✓" : "○"} Preview</span></button
 							>
 							<button
 								onclick={() => {
 									togglePreviewZoom();
 									titleMenu = null;
-								}}>Zoom Preview</button
+								}}><span>Zoom Preview</span></button
 							>
+							<div class="sep"></div>
 							<button
 								onclick={() => {
 									minimapOn = !minimapOn;
 									titleMenu = null;
-								}}>{minimapOn ? "✓" : "○"} Minimap</button
+								}}><span>{minimapOn ? "✓" : "○"} Minimap</span></button
+							>
+							<button
+								onclick={() => {
+									paletteQ = "> ";
+									palette = true;
+									titleMenu = null;
+								}}><span>Command Palette…</span> <small>F1</small></button
+							>
+						{:else if titleMenu === "Go"}
+							<button
+								onclick={() => {
+									paletteQ = "";
+									palette = true;
+									titleMenu = null;
+								}}><span>Go to File…</span> <small>Ctrl+P</small></button
+							>
+							<button
+								onclick={() => {
+									gotoDraft = String(line);
+									gotoOpen = true;
+									titleMenu = null;
+								}}><span>Go to Line…</span> <small>Ctrl+G</small></button
+							>
+							<button
+								onclick={() => {
+									sideView = "explorer";
+									sidebar = true;
+									outlineOpen = true;
+									titleMenu = null;
+								}}><span>Go to Symbol…</span> <small>Ctrl+Shift+O</small></button
 							>
 						{:else if titleMenu === "Run"}
 							<button
@@ -781,20 +956,38 @@
 									previewRef?.refresh();
 									titleMenu = null;
 									toast("Preview refreshed");
-								}}>Run Preview <small>F5</small></button
+								}}><span>Run Preview</span> <small>F5</small></button
 							>
 							<button
 								onclick={() => {
 									previewRef?.openNewTab();
 									titleMenu = null;
-								}}>Open Preview in New Tab</button
+								}}><span>Open Preview in New Tab</span></button
 							>
 							<button
 								onclick={() => {
 									panelTab = "terminal";
 									showPanel = true;
 									titleMenu = null;
-								}}>Focus Terminal <small>Ctrl+`</small></button
+								}}><span>Focus Terminal</span> <small>Ctrl+`</small></button
+							>
+						{:else if titleMenu === "Terminal"}
+							<button
+								onclick={() => {
+									panelTab = "terminal";
+									showPanel = true;
+									termTabs = [...termTabs, `powershell (${termTabs.length + 1})`];
+									activeTerm = termTabs.length - 1;
+									titleMenu = null;
+								}}><span>New Terminal</span> <small>Ctrl+Shift+`</small></button
+							>
+							<button
+								onclick={() => {
+									termLines = [];
+									panelTab = "terminal";
+									showPanel = true;
+									titleMenu = null;
+								}}><span>Clear Terminal</span></button
 							>
 						{:else}
 							<button
@@ -802,13 +995,13 @@
 									paletteQ = "> ";
 									palette = true;
 									titleMenu = null;
-								}}>Keyboard Shortcuts</button
+								}}><span>Keyboard Shortcuts</span></button
 							>
 							<button
 								onclick={() => {
 									toast("Neverview v2 — Monaco + virtual FS");
 									titleMenu = null;
-								}}>About Neverview</button
+								}}><span>About Neverview</span></button
 							>
 						{/if}
 					</div>
@@ -885,7 +1078,7 @@
 			<button
 				type="button"
 				class="cmdcenter"
-				title="Search files or run commands (Ctrl+P)"
+				title="{active ? active : 'No file open'} — {activeProjectName} (Ctrl+P)"
 				onclick={() => {
 					paletteQ = "";
 					palette = true;
@@ -893,26 +1086,100 @@
 			>
 				<Icon name="search" size={13} />
 				<span class="cc-main"
-					>{#if isDirty}<span class="cc-dot">●</span>{/if}{activeProjectName} — {active
-						? basename(active)
-						: "no file"}</span
+					>{#if isDirty}<span class="cc-dot">●</span>{/if}{active ? basename(active) : "no file"} — {activeProjectName}</span
 				>
-				<kbd>Ctrl P</kbd>
 			</button>
 			<div class="actions">
-				<button class="iconbtn" title="Customize Layout" onclick={() => (sidebar = !sidebar)}
-					><Icon name="split-horizontal" size={16} /></button
+				<button
+					class="iconbtn"
+					title="Toggle Primary Side Bar (Ctrl+B)"
+					aria-label="Toggle Primary Side Bar"
+					onclick={() => (sidebar = !sidebar)}><Icon name="split-horizontal" size={16} /></button
 				>
 				<button
-					class="btn small ghost"
-					onclick={() => {
-						previewRef?.refresh();
-						toast("Preview refreshed");
-					}}><Icon name="play" size={14} /> Run</button
+					class="iconbtn"
+					title="Toggle Panel (Ctrl+J)"
+					aria-label="Toggle Panel"
+					onclick={() => (showPanel = !showPanel)}><Icon name="terminal" size={16} /></button
 				>
-				<button class="btn small" onclick={() => previewRef?.openNewTab()}
-					><Icon name="link-external" size={14} /> Open preview</button
-				>
+				<div class="layoutwrap">
+					<button
+						class="iconbtn"
+						title="Customize Layout"
+						aria-label="Customize Layout"
+						onclick={() => (layoutMenu = !layoutMenu)}><Icon name="extensions" size={15} /></button
+					>
+					{#if layoutMenu}
+						<button class="veil" aria-label="Close layout" onclick={() => (layoutMenu = false)}
+						></button>
+						<div class="layoutmenu" role="menu">
+							<div class="projmenu-head">Layout</div>
+							<button
+								onclick={() => {
+									sidebar = !sidebar;
+									layoutMenu = false;
+								}}><span>{sidebar ? "✓" : "○"} Primary Side Bar</span><small>Ctrl+B</small></button
+							>
+							<button
+								onclick={() => {
+									showPanel = !showPanel;
+									layoutMenu = false;
+								}}><span>{showPanel ? "✓" : "○"} Panel</span><small>Ctrl+J</small></button
+							>
+							<button
+								onclick={() => {
+									showPreview = !showPreview;
+									layoutMenu = false;
+								}}><span>{showPreview ? "✓" : "○"} Preview (side)</span></button
+							>
+							<button
+								onclick={() => {
+									togglePreviewZoom();
+									layoutMenu = false;
+								}}><span>Zoom Preview</span></button
+							>
+							<div class="sep"></div>
+							<button
+								onclick={() => {
+									previewRef?.refresh();
+									layoutMenu = false;
+									toast("Preview refreshed");
+								}}><span>Run Preview</span><small>F5</small></button
+							>
+							<button
+								onclick={() => {
+									previewRef?.openNewTab();
+									layoutMenu = false;
+								}}><span>Open Preview in New Tab</span></button
+							>
+						</div>
+					{/if}
+				</div>
+				<div class="winbtns" role="group" aria-label="Window controls">
+					<button
+						class="winbtn"
+						title="Minimize"
+						aria-label="Minimize"
+						onclick={() => toast("Minimize is a mock in the browser")}
+						><span class="wl">─</span></button
+					>
+					<button
+						class="winbtn"
+						title={winMax ? "Restore" : "Maximize"}
+						aria-label={winMax ? "Restore" : "Maximize"}
+						onclick={() => {
+							winMax = !winMax;
+							toast(winMax ? "Maximized (mock)" : "Restored (mock)");
+						}}><span class="wl">{winMax ? "❐" : "▢"}</span></button
+					>
+					<button
+						class="winbtn close"
+						title="Close"
+						aria-label="Close"
+						onclick={() => toast("Close is disabled in the browser demo")}
+						><span class="wl">✕</span></button
+					>
+				</div>
 			</div>
 		</div>
 
@@ -976,28 +1243,92 @@
 					onclick={() => (showPreview = !showPreview)}><Icon name="browser" size={22} /></button
 				>
 				<div class="sp"></div>
-				<button
-					title="Accounts"
-					aria-label="Accounts"
-					onclick={() => toast("Signed in locally — no account needed")}
-					><Icon name="account" size={22} /></button
-				>
-				<button
-					class:on={sideView === "settings"}
-					title="Settings"
-					aria-label="Settings"
-					onclick={() => {
-						sideView = "settings";
-						sidebar = true;
-					}}><Icon name="settings-gear" size={22} /></button
-				>
+				<div class="actwrap">
+					<button
+						title="Accounts"
+						aria-label="Accounts"
+						onclick={() => {
+							accountsMenu = !accountsMenu;
+							settingsMenu = false;
+						}}><Icon name="account" size={22} /></button
+					>
+					{#if accountsMenu}
+						<button class="veil" aria-label="Close accounts" onclick={() => (accountsMenu = false)}
+						></button>
+						<div class="actmenu" role="menu">
+							<div class="projmenu-head">Accounts</div>
+							<div class="actuser">
+								<Icon name="account" size={28} /><span
+									>local-user<br /><small>Signed in locally — no account needed</small></span
+								>
+							</div>
+							<div class="sep"></div>
+							<button
+								onclick={() => {
+									toast("No other accounts");
+									accountsMenu = false;
+								}}><span>Manage trusted extensions</span></button
+							>
+						</div>
+					{/if}
+				</div>
+				<div class="actwrap">
+					<button
+						class:on={sideView === "settings"}
+						title="Manage"
+						aria-label="Manage"
+						onclick={() => {
+							settingsMenu = !settingsMenu;
+							accountsMenu = false;
+						}}
+						><Icon name="settings-gear" size={22} />
+						{#if warnCount > 0}<span class="badge">{warnCount}</span>{/if}</button
+					>
+					{#if settingsMenu}
+						<button class="veil" aria-label="Close manage" onclick={() => (settingsMenu = false)}
+						></button>
+						<div class="actmenu" role="menu">
+							<div class="projmenu-head">Manage</div>
+							<button
+								onclick={() => {
+									sideView = "settings";
+									sidebar = true;
+									settingsMenu = false;
+								}}><span>Settings</span><small>Ctrl+,</small></button
+							>
+							<button
+								onclick={() => {
+									paletteQ = "> ";
+									palette = true;
+									settingsMenu = false;
+								}}><span>Command Palette…</span><small>F1</small></button
+							>
+							<button
+								onclick={() => {
+									toast("Color Theme: Dark Modern (default)");
+									settingsMenu = false;
+								}}><span>Color Theme</span><small>Ctrl+K T</small></button
+							>
+							<button
+								onclick={() => {
+									toast("Keyboard Shortcuts — F1 then type");
+									settingsMenu = false;
+								}}><span>Keyboard Shortcuts</span><small>Ctrl+K S</small></button
+							>
+							<div class="sep"></div>
+							<button
+								onclick={() => {
+									toast("Neverview v2 — Monaco + virtual FS");
+									settingsMenu = false;
+								}}><span>About</span></button
+							>
+						</div>
+					{/if}
+				</div>
 				<button
 					title="Notifications"
 					aria-label="Notifications"
-					onclick={() => {
-						panelTab = "problems";
-						showPanel = true;
-					}}
+					onclick={() => (notifCenter = !notifCenter)}
 					><Icon name="bell" size={22} />
 					{#if warnCount > 0}<span class="badge">{warnCount}</span>{/if}
 				</button>
@@ -1067,6 +1398,48 @@
 					{/if}
 					<div class="side-body">
 						{#if sideView === "explorer"}
+							<button
+								type="button"
+								class="sec-title collapsible"
+								onclick={() => (openEditorsOpen = !openEditorsOpen)}
+							>
+								<Icon name={openEditorsOpen ? "chevron-down" : "chevron-right"} size={14} />
+								OPEN EDITORS
+								<small>{tabs.length}</small>
+							</button>
+							{#if openEditorsOpen}
+								<div class="openeditors">
+									{#each tabs as t}
+										{@const hm = hiMatch(basename(t), "")}
+										<div
+											class="trow openrow"
+											class:on={t === active}
+											role="treeitem"
+											tabindex="0"
+											aria-selected={t === active}
+											title={t}
+											onclick={() => openFile(t)}
+											onkeydown={(e) => activateOnKey(e, () => openFile(t))}
+										>
+											<span class="ic"><FileIcon name={basename(t)} /></span>
+											<span class="nm">{basename(t)}</span>
+											<span class="opath">{t.slice(0, t.lastIndexOf("/") + 1) || "/"}</span>
+											{#if dirty.has(t)}<span class="dirtymini">●</span>{:else}
+												<button
+													class="x"
+													title="Close"
+													aria-label="Close {basename(t)}"
+													onclick={(e) => {
+														e.stopPropagation();
+														closeTab(t);
+													}}><Icon name="close" size={12} /></button
+												>
+											{/if}
+										</div>
+									{/each}
+									{#if tabs.length === 0}<div class="oempty">No open editors.</div>{/if}
+								</div>
+							{/if}
 							<div class="sec-title">
 								<Icon name="chevron-down" size={14} />
 								{activeProjectName} · {fileCount} files
@@ -1144,10 +1517,39 @@
 							{/if}
 						{:else if sideView === "search"}
 							<div class="searchbox">
-								<input placeholder="Search files…" bind:value={query} />
+								<div class="searchrow">
+									<input placeholder="Search files…" bind:value={query} aria-label="Search files" />
+									<span class="sopts">
+										<button
+											type="button"
+											class="sopt"
+											class:on={searchCase}
+											title="Match Case"
+											aria-pressed={searchCase}
+											onclick={() => (searchCase = !searchCase)}>Aa</button
+										>
+										<button
+											type="button"
+											class="sopt"
+											class:on={searchWord}
+											title="Match Whole Word"
+											aria-pressed={searchWord}
+											onclick={() => (searchWord = !searchWord)}>ab</button
+										>
+										<button
+											type="button"
+											class="sopt"
+											class:on={searchRegex}
+											title="Use Regular Expression"
+											aria-pressed={searchRegex}
+											onclick={() => (searchRegex = !searchRegex)}>.*</button
+										>
+									</span>
+								</div>
 								<input
 									placeholder="Replace (Enter applies to open file)"
 									bind:value={replaceQ}
+									aria-label="Replace"
 									onkeydown={(e) => {
 										if (e.key === "Enter" && replaceQ && active && filesSnap[active]) {
 											const cur = filesSnap[active].content;
@@ -1158,6 +1560,18 @@
 								/>
 								<div class="smeta">
 									{searchDetailed.length} results {query ? `for “${query}”` : ""}
+									<button
+										type="button"
+										class="replaceall"
+										title="Replace All in open file"
+										onclick={() => {
+											if (replaceQ && active && filesSnap[active] && query) {
+												const cur = filesSnap[active].content;
+												writeFile(active, cur.split(query).join(replaceQ));
+												toast(`Replaced all in ${basename(active)}`);
+											}
+										}}>⇄ Replace All</button
+									>
 								</div>
 							</div>
 							{#each searchDetailed as h}
@@ -1302,9 +1716,11 @@
 							<div
 								class="tab"
 								class:on={t === active}
+								class:dirty={dirty.has(t)}
 								class:dragging={dragTab === t}
 								role="tab"
 								tabindex="0"
+								title={t}
 								draggable="true"
 								aria-selected={t === active}
 								onclick={() => openFile(t)}
@@ -1347,11 +1763,11 @@
 								<span class="tabname">
 									<FileIcon name={basename(t)} />
 									<span>{basename(t)}</span>
-									{#if dirty.has(t)}<Icon name="circle-filled" size={8} class="dirtydot" />{/if}
+									<span class="dirtydot" aria-hidden="true">●</span>
 								</span>
 								<button
 									class="x"
-									title="Close"
+									title="Close (Ctrl+W)"
 									aria-label="Close {basename(t)}"
 									onclick={(e) => {
 										e.stopPropagation();
@@ -1360,6 +1776,12 @@
 								>
 							</div>
 						{/each}
+						<button
+							class="newtab"
+							title="New File"
+							aria-label="New File"
+							onclick={() => doCreateFile("/", "untitled.html")}><span>+</span></button
+						>
 					</div>
 					<div class="editor-actions">
 						<button
@@ -1399,23 +1821,61 @@
 										sideView = "explorer";
 										sidebar = true;
 									}
-								}}>{c.label}</button
+								}}
+								>{#if c.isFile}<FileIcon name={c.label} />{/if}{c.label}</button
 							>
 							{#if i < crumbs.length - 1}<span class="csep">›</span>{/if}
 						{/each}
 						{#if outline.length > 0}
+							<span class="symwrap">
+								<span class="csep">›</span>
+								<button
+									type="button"
+									class="crumb sym"
+									title="Go to symbol in file"
+									onclick={() => (crumbSymMenu = !crumbSymMenu)}
+									>⌖ {outline[0]?.label ?? ""} <small>▾</small></button
+								>
+								{#if crumbSymMenu}
+									<button
+										class="veil"
+										aria-label="Close symbols"
+										onclick={() => (crumbSymMenu = false)}
+									></button>
+									<div class="symmenu" role="menu">
+										{#each outline.slice(0, 20) as o}
+											<button
+												onclick={() => {
+													revealLine = 0;
+													requestAnimationFrame(() => (revealLine = o.line));
+													crumbSymMenu = false;
+												}}
+												><span class="okind">{o.kind}</span>
+												{o.label} <small>:{o.line}</small></button
+											>
+										{/each}
+									</div>
+								{/if}
+							</span>
+						{/if}
+						<span class="crumb-right">
 							<button
 								type="button"
-								class="crumb sym"
-								title="Go to symbol"
-								onclick={() => {
-									sideView = "explorer";
-									sidebar = true;
-									outlineOpen = true;
-								}}>⌖ {outline[0]?.label ?? ""}</button
+								class="mini-crumb"
+								title="Select Language Mode"
+								onclick={() => (langPick = true)}>{languageOf(active)}</button
 							>
-						{/if}
-						<span class="crumb-right">{languageOf(active)} · Ln {line}, Col {col}</span>
+							<span>·</span>
+							<button
+								type="button"
+								class="mini-crumb"
+								title="Go to Line/Column"
+								onclick={() => {
+									gotoDraft = String(line);
+									gotoOpen = true;
+								}}>Ln {line}, Col {col}</button
+							>
+						</span>
 					</div>
 				{/if}
 				<div class="split" bind:this={splitEl}>
@@ -1449,33 +1909,64 @@
 							/>
 						{:else}
 							<div class="welcome">
-								<div class="wcol">
-									<h2>Start</h2>
-									<button onclick={() => doCreateFile("/", "untitled.html")}>＋ New File…</button>
-									<button onclick={openNewProjectDialog}>＋ New Project…</button>
-									<button
-										onclick={() => {
-											paletteQ = "";
-											palette = true;
-										}}>Open File… <small>Ctrl+P</small></button
+								<div class="wlogo" aria-hidden="true">
+									<svg width="52" height="52" viewBox="0 0 24 24" fill="none"
+										><path
+											fill="#23A9F2"
+											opacity="0.9"
+											d="M17.5 3 3.8 10.2c-.4.3-.4.9 0 1.2l3.4 2.1 2.2-2.2 2.1 2.1 2.1-2.1 2.1 2.1 5.8-3.6c.6-.4.6-1.2 0-1.6L17.5 3Z"
+										/><path
+											fill="#007ACC"
+											opacity="0.9"
+											d="m9.4 12.4-2.2 2.2 10.3 6.4c.6.4 1.4 0 1.4-.8V4.6L9.4 12.4Z"
+										/></svg
 									>
+									<div>
+										<h1>Neverview</h1>
+										<p>Editing evolved — {activeProjectName}</p>
+									</div>
 								</div>
-								<div class="wcol">
-									<h2>Recent</h2>
-									{#each tabs.slice(-5).reverse() as t}
-										<button onclick={() => openFile(t)}
-											><FileIcon name={basename(t)} />
-											{t}</button
+								<div class="wcols">
+									<div class="wcol">
+										<h2>Start</h2>
+										<button onclick={() => doCreateFile("/", "untitled.html")}
+											><span class="wic">＋</span> New File…</button
 										>
-									{/each}
-									{#if tabs.length === 0}<p>No recent files.</p>{/if}
-								</div>
-								<div class="wcol">
-									<h2>Shortcuts</h2>
-									<p><kbd>Ctrl P</kbd> quick open</p>
-									<p><kbd>Ctrl B</kbd> sidebar</p>
-									<p><kbd>Ctrl J</kbd> panel</p>
-									<p><kbd>Ctrl `</kbd> terminal</p>
+										<button onclick={openNewProjectDialog}
+											><span class="wic">＋</span> New Project…</button
+										>
+										<button
+											onclick={() => {
+												paletteQ = "";
+												palette = true;
+											}}>Open File… <small>Ctrl+P</small></button
+										>
+										<button
+											onclick={() => {
+												panelTab = "terminal";
+												showPanel = true;
+											}}>Open Terminal <small>Ctrl+`</small></button
+										>
+									</div>
+									<div class="wcol">
+										<h2>Recent</h2>
+										{#each tabs.slice(-5).reverse() as t}
+											<button onclick={() => openFile(t)}
+												><FileIcon name={basename(t)} />
+												{t}</button
+											>
+										{/each}
+										{#if tabs.length === 0}<p>No recent files. Files you open appear here.</p>{/if}
+									</div>
+									<div class="wcol">
+										<h2>Shortcuts</h2>
+										<p><kbd>Ctrl P</kbd> quick open</p>
+										<p><kbd>Ctrl Shift P</kbd> commands</p>
+										<p><kbd>Ctrl B</kbd> sidebar</p>
+										<p><kbd>Ctrl J</kbd> panel</p>
+										<p><kbd>Ctrl `</kbd> terminal</p>
+										<p><kbd>F1</kbd> help</p>
+									</div>
 								</div>
 							</div>
 						{/if}
@@ -1536,25 +2027,68 @@
 					<div class="panel" style={panelMax ? "flex-basis:45vh" : `flex-basis:${panelH}px`}>
 						<div class="paneltabs">
 							<button class:on={panelTab === "console"} onclick={() => (panelTab = "console")}
-								><Icon name="debug" size={13} /> Debug Console ({logs.length})</button
+								><Icon name="debug" size={13} /> Debug Console</button
 							>
 							<button class:on={panelTab === "output"} onclick={() => (panelTab = "output")}
-								>Output ({logs.filter((l) => l.kind !== "log").length})</button
+								>Output</button
 							>
-							<button class:on={panelTab === "problems"} onclick={() => (panelTab = "problems")}
-								><Icon name={problems.length || errCount ? "error" : "check"} size={13} /> Problems ({problems.length +
-									errCount})</button
-							>
-							<button class:on={panelTab === "terminal"} onclick={() => (panelTab = "terminal")}
-								><Icon name="terminal" size={13} /> Terminal</button
-							>
-							<span style="flex:1"></span>
-							{#if panelTab !== "terminal"}
-								<input class="panelfilter" placeholder="Filter…" bind:value={panelFilter} />
-								<button onclick={() => (logs = [])} title="Clear"
-									><Icon name="trash" size={13} /> Clear</button
+							{#if panelTab === "output"}
+								<button
+									type="button"
+									class="chanpick"
+									title="Output channel"
+									onclick={() => {
+										const order = ["Preview", "Tasks", "Extensions"];
+										outputChannel = order[(order.indexOf(outputChannel) + 1) % order.length];
+									}}>{outputChannel} ▾</button
 								>
 							{/if}
+							<button class:on={panelTab === "problems"} onclick={() => (panelTab = "problems")}
+								><Icon name={problems.length || errCount ? "error" : "check"} size={13} /> Problems
+								<span class="pcount">{problems.length + errCount}</span></button
+							>
+							{#if termTabs.length > 1}
+								{#each termTabs as tt, i}
+									<button
+										class:on={panelTab === "terminal" && activeTerm === i}
+										onclick={() => {
+											panelTab = "terminal";
+											activeTerm = i;
+										}}><Icon name="terminal" size={12} /> {tt}</button
+									>
+								{/each}
+							{:else}
+								<button class:on={panelTab === "terminal"} onclick={() => (panelTab = "terminal")}
+									><Icon name="terminal" size={13} /> Terminal</button
+								>
+							{/if}
+							<span style="flex:1"></span>
+							{#if panelTab === "terminal"}
+								<button
+									title="New terminal (Ctrl+Shift+`)"
+									onclick={() => {
+										termTabs = [...termTabs, `powershell (${termTabs.length + 1})`];
+										activeTerm = termTabs.length - 1;
+									}}><span class="plussign">+</span></button
+								>
+								<button title="Clear terminal" onclick={() => (termLines = [])}
+									><Icon name="trash" size={13} /></button
+								>
+							{:else}
+								<input
+									class="panelfilter"
+									placeholder="Filter (e.g. error)…"
+									bind:value={panelFilter}
+								/>
+								<button onclick={() => (logs = [])} title="Clear Output"
+									><Icon name="trash" size={13} /></button
+								>
+							{/if}
+							<button
+								title="Views and More Actions…"
+								onclick={() => toast("Panel actions: clear · maximize · hide")}
+								><Icon name="ellipsis" size={13} /></button
+							>
 							<button
 								title={panelMax ? "Restore" : "Maximize panel"}
 								onclick={() => (panelMax = !panelMax)}
@@ -1581,34 +2115,50 @@
 											runTerm(termInput);
 										}}
 									>
-										<span class="prompt">➜ {activeProjectName}$</span>
+										<span class="prompt"
+											>➜ {activeProjectName} [{termTabs[activeTerm] ?? "powershell"}]$</span
+										>
 										<input
 											bind:value={termInput}
-											placeholder="help · ls · open /index.html"
+											placeholder="help · ls · open /index.html · entry · echo"
 											aria-label="Terminal input"
 										/>
 									</form>
 								</div>
 							{:else if panelTab === "problems"}
-								{#each problems as p}
-									<button
-										type="button"
-										class="logline warn clickable"
-										onclick={() => openFile(p.replace("Empty file: ", ""))}
-									>
-										<Icon name="warning" size={13} />
-										{p} <small>— open file</small>
-									</button>
-								{/each}
-								{#each logs.filter((l) => l.kind === "error") as l}
-									<div class="logline error">
-										<Icon name="error" size={13} />
-										{l.text}
+								<div class="probs">
+									<div class="prow phead">
+										<span></span><span>File</span><span>Message</span><span>Go</span>
 									</div>
-								{/each}
-								{#if problems.length === 0 && errCount === 0}<div class="logline info">
-										<Icon name="check" size={13} /> No problems — working tree clean.
-									</div>{/if}
+									{#each problems as p}
+										<button
+											type="button"
+											class="prow clickable"
+											onclick={() => openFile(p.replace("Empty file: ", ""))}
+										>
+											<Icon name="warning" size={13} />
+											<span class="pfile">{p.replace("Empty file: ", "")}</span>
+											<span class="pmsg">Empty file</span>
+											<small>open →</small>
+										</button>
+									{/each}
+									{#each logs.filter((l) => l.kind === "error") as l}
+										<div class="prow error">
+											<Icon name="error" size={13} />
+											<span class="pfile">preview</span>
+											<span class="pmsg">{l.text}</span>
+											<small>log</small>
+										</div>
+									{/each}
+									{#if problems.length === 0 && errCount === 0}<div class="logline info">
+											<Icon name="check" size={13} /> No problems — working tree clean.
+										</div>{/if}
+								</div>
+							{:else if panelTab === "output" && outputChannel !== "Preview"}
+								<div class="logline info">
+									[ {outputChannel} ] — No output in this mock channel yet. Run the preview to generate
+									logs.
+								</div>
 							{:else}
 								{#each filteredLogs as l}<div class="logline {l.kind}">
 										<span class="ltime">{l.kind}</span>
@@ -1627,10 +2177,47 @@
 		</div>
 
 		<div class="statusbar">
-			<button type="button" class="it" title="Project branch" onclick={() => (projMenu = !projMenu)}
-				><Icon name="git-branch" size={13} />
-				{activeProjectName}{isDirty ? " ●" : ""}</button
+			<button
+				type="button"
+				class="it remote"
+				title="Remote — local workspace (mock)"
+				onclick={() => toast("Remote: local workspace")}
+				><span class="remote-glyph">{"<>"}</span></button
 			>
+			<div class="sbwrap">
+				<button
+					type="button"
+					class="it"
+					title="Branch — switch branch"
+					onclick={() => (branchMenu = !branchMenu)}
+					><Icon name="git-branch" size={13} />
+					{currentBranch}{isDirty ? "*" : ""}</button
+				>
+				{#if branchMenu}
+					<button class="veil up" aria-label="Close branches" onclick={() => (branchMenu = false)}
+					></button>
+					<div class="sbmenu" role="menu">
+						<div class="projmenu-head">Branch</div>
+						{#each branches as b}
+							<button
+								onclick={() => {
+									currentBranch = b;
+									branchMenu = false;
+									toast(`Switched to ${b} (mock)`);
+								}}
+								><span>{b}</span>{#if b === currentBranch}<small>✓ current</small>{/if}</button
+							>
+						{/each}
+						<div class="sep"></div>
+						<button
+							onclick={() => {
+								branchMenu = false;
+								toast("New branch is a mock");
+							}}><span>+ New Branch…</span></button
+						>
+					</div>
+				{/if}
+			</div>
 			<button
 				type="button"
 				class="it"
@@ -1653,12 +2240,14 @@
 			>
 			<button
 				type="button"
-				class="it"
+				class="it hide-sm"
+				title="{fileCount} files in workspace"
 				onclick={() => {
-					if (confirm(`Reset project "${activeProjectName}"?`)) resetWorkspace();
+					sideView = "explorer";
+					sidebar = true;
 				}}
-				><Icon name="refresh" size={13} />
-				{fileCount} files · {projectsSnap.length} projects</button
+				><Icon name="files" size={13} />
+				{fileCount} files</button
 			>
 			<span class="right">
 				<button
@@ -1670,9 +2259,102 @@
 						gotoOpen = true;
 					}}>Ln {line}, Col {col}</button
 				>
-				<button type="button" class="it" title="Indentation">Spaces: 2</button>
-				<button type="button" class="it" title="Encoding">UTF-8</button>
-				<button type="button" class="it" title="Line endings">LF</button>
+				<div class="sbwrap">
+					<button
+						type="button"
+						class="it"
+						title="Select Indentation"
+						onclick={() => (indentMenu = !indentMenu)}
+						>{useSpaces ? "Spaces" : "Tabs"}: {indentSize}</button
+					>
+					{#if indentMenu}
+						<button class="veil up" aria-label="Close indent" onclick={() => (indentMenu = false)}
+						></button>
+						<div class="sbmenu" role="menu">
+							<div class="projmenu-head">Indentation</div>
+							<button
+								onclick={() => {
+									useSpaces = true;
+									indentMenu = false;
+								}}
+								><span>Spaces</span>{#if useSpaces}<small>✓</small>{/if}</button
+							>
+							<button
+								onclick={() => {
+									useSpaces = false;
+									indentMenu = false;
+								}}
+								><span>Tabs</span>{#if !useSpaces}<small>✓</small>{/if}</button
+							>
+							<div class="sep"></div>
+							{#each [2, 4, 8] as n}
+								<button
+									onclick={() => {
+										indentSize = n;
+										indentMenu = false;
+									}}
+									><span>{n}</span>{#if indentSize === n}<small>✓</small>{/if}</button
+								>
+							{/each}
+						</div>
+					{/if}
+				</div>
+				<div class="sbwrap">
+					<button
+						type="button"
+						class="it"
+						title="Select Encoding"
+						onclick={() => (encodingMenu = !encodingMenu)}>{encoding}</button
+					>
+					{#if encodingMenu}
+						<button
+							class="veil up"
+							aria-label="Close encoding"
+							onclick={() => (encodingMenu = false)}
+						></button>
+						<div class="sbmenu" role="menu">
+							{#each ["UTF-8", "UTF-16 LE", "Western (Windows 1252)"] as e}
+								<button
+									onclick={() => {
+										encoding = e === "UTF-8" ? "UTF-8" : "UTF-8";
+										encodingMenu = false;
+										toast(e === "UTF-8" ? "Encoding: UTF-8" : `${e} is a mock — kept UTF-8`);
+									}}
+									><span>{e}</span>{#if e === "UTF-8"}<small>✓</small>{/if}</button
+								>
+							{/each}
+						</div>
+					{/if}
+				</div>
+				<div class="sbwrap">
+					<button
+						type="button"
+						class="it"
+						title="Select End of Line Sequence"
+						onclick={() => (eolMenu = !eolMenu)}>{eol}</button
+					>
+					{#if eolMenu}
+						<button class="veil up" aria-label="Close eol" onclick={() => (eolMenu = false)}
+						></button>
+						<div class="sbmenu" role="menu">
+							<button
+								onclick={() => {
+									eol = "LF";
+									eolMenu = false;
+								}}
+								><span>LF</span>{#if eol === "LF"}<small>✓</small>{/if}</button
+							>
+							<button
+								onclick={() => {
+									eol = "CRLF";
+									eolMenu = false;
+									toast("CRLF is a mock — kept LF");
+									eol = "LF";
+								}}><span>CRLF</span></button
+							>
+						</div>
+					{/if}
+				</div>
 				<button
 					type="button"
 					class="it"
@@ -1689,11 +2371,8 @@
 				<button
 					type="button"
 					class="it"
-					title="Notifications"
-					onclick={() => {
-						panelTab = "problems";
-						showPanel = true;
-					}}><Icon name="bell" size={13} /></button
+					title="Notifications — show notification center"
+					onclick={() => (notifCenter = !notifCenter)}><Icon name="bell" size={13} /></button
 				>
 			</span>
 		</div>
@@ -1712,33 +2391,41 @@
 	<div
 		class="ctx"
 		role="menu"
-		style={`left:${Math.min(tabCtx.x, window.innerWidth - 220)}px;top:${tabCtx.y}px`}
+		style={`left:${Math.min(tabCtx.x, window.innerWidth - 230)}px;top:${tabCtx.y}px`}
 	>
+		<button
+			onclick={() => {
+				openFile(tabCtx!.path);
+				tabCtx = null;
+			}}><span>Open</span></button
+		>
+		<div class="sep"></div>
 		<button
 			onclick={() => {
 				closeTab(tabCtx!.path);
 				tabCtx = null;
-			}}><Icon name="close" size={14} /> Close</button
+			}}><span>Close</span><small>Ctrl+W</small></button
 		>
 		<button
 			onclick={() => {
 				closeOthers(tabCtx!.path);
 				tabCtx = null;
 				toast("Closed others");
-			}}>Close Others</button
+			}}><span>Close Others</span></button
 		>
 		<button
 			onclick={() => {
 				closeToRight(tabCtx!.path);
 				tabCtx = null;
-			}}>Close to the Right</button
+			}}><span>Close to the Right</span></button
 		>
 		<button
 			onclick={() => {
 				closeAll();
 				tabCtx = null;
-			}}>Close All</button
+			}}><span>Close All</span></button
 		>
+		<div class="sep"></div>
 		<button
 			onclick={() => {
 				try {
@@ -1748,7 +2435,15 @@
 					/* noop */
 				}
 				tabCtx = null;
-			}}>Copy Path</button
+			}}><span>Copy Path</span><small>Ctrl+C</small></button
+		>
+		<button
+			onclick={() => {
+				sideView = "explorer";
+				sidebar = true;
+				tabCtx = null;
+				toast("Revealed in Explorer (mock)");
+			}}><span>Reveal in Explorer</span></button
 		>
 	</div>
 {/if}
@@ -1765,30 +2460,50 @@
 	<div class="ctx" role="menu" style={`left:${editorCtx.x}px;top:${editorCtx.y}px`}>
 		<button
 			onclick={() => {
+				document.execCommand?.("cut");
+				editorCtx = null;
+			}}><span>Cut</span><small>Ctrl+X</small></button
+		>
+		<button
+			onclick={() => {
+				document.execCommand?.("copy");
+				editorCtx = null;
+			}}><span>Copy</span><small>Ctrl+C</small></button
+		>
+		<button
+			onclick={() => {
+				document.execCommand?.("paste");
+				editorCtx = null;
+			}}><span>Paste</span><small>Ctrl+V</small></button
+		>
+		<div class="sep"></div>
+		<button
+			onclick={() => {
 				paletteQ = "> ";
 				palette = true;
 				editorCtx = null;
-			}}>Command Palette…</button
+			}}><span>Command Palette…</span><small>F1</small></button
 		>
 		<button
 			onclick={() => {
 				gotoDraft = String(line);
 				gotoOpen = true;
 				editorCtx = null;
-			}}>Go to Line…</button
+			}}><span>Go to Line…</span><small>Ctrl+G</small></button
 		>
 		<button
 			onclick={() => {
 				langPick = true;
 				editorCtx = null;
-			}}>Change Language Mode</button
+			}}><span>Change Language Mode</span></button
 		>
+		<div class="sep"></div>
 		<button
 			onclick={() => {
 				previewRef?.refresh();
 				editorCtx = null;
 				toast("Preview refreshed");
-			}}><Icon name="play" size={14} /> Run Preview</button
+			}}><Icon name="play" size={14} /><span>Run Preview</span><small>F5</small></button
 		>
 	</div>
 {/if}
@@ -1850,9 +2565,11 @@
 			/>
 			<div class="opts">
 				{#if !paletteIsCmd}
-					<div class="pgroup">files · {paletteFiles.length}</div>
+					<div class="pgroup">files · {paletteFiles.length} · MRU first</div>
 				{/if}
-				{#each paletteFiles as p, i}<button
+				{#each paletteFiles as p, i}
+					{@const hm = hiMatch(p, paletteQ)}
+					<button
 						type="button"
 						class="opt"
 						class:on={paletteSel === i}
@@ -1862,7 +2579,10 @@
 							palette = false;
 						}}
 						><FileIcon name={basename(p)} />
-						{p}<small>file · Enter</small></button
+						<span class="pfile"
+							><span>{hm.pre}</span>{#if hm.mid}<mark>{hm.mid}</mark>{/if}<span>{hm.post}</span
+							></span
+						><small>{tabs.includes(p) ? "open ·" : ""} file · ↵</small></button
 					>{/each}
 				<div class="pgroup">projects</div>
 				{#each projectsSnap.filter((m) => m.name
@@ -1898,7 +2618,9 @@
 					>{/each}
 			</div>
 			<div class="pfoot">
-				<span>↑↓ navigate</span><span>↵ select</span><span>esc close</span>
+				<span><kbd>↑↓</kbd> navigate</span><span><kbd>↵</kbd> select</span><span
+					><kbd>esc</kbd> close</span
+				><span class="pfhint">{paletteIsCmd ? "command mode" : "type > for commands"}</span>
 			</div>
 		</div>
 	</div>
@@ -2090,7 +2812,15 @@
 <div class="toasts" aria-live="polite">
 	{#each toasts as t}
 		<div class="toast {t.kind}">
-			<span>{t.text}</span>
+			<span class="tdot"></span>
+			<span class="ttext">{t.text}</span>
+			<button
+				class="tact"
+				onclick={() => {
+					toasts = toasts.filter((x) => x.id !== t.id);
+					notifCenter = true;
+				}}>Details</button
+			>
 			<button
 				class="iconbtn"
 				aria-label="Dismiss"
@@ -2100,3 +2830,33 @@
 		</div>
 	{/each}
 </div>
+
+{#if notifCenter}
+	<button class="veil" aria-label="Close notifications" onclick={() => (notifCenter = false)}
+	></button>
+	<div class="notifcenter" role="dialog" aria-label="Notifications">
+		<div class="notif-head">
+			<span>Notifications</span><button
+				class="iconbtn"
+				title="Clear all"
+				onclick={() => {
+					toasts = [];
+					logs = [];
+				}}><Icon name="trash" size={13} /> Clear</button
+			><button class="iconbtn" aria-label="Close" onclick={() => (notifCenter = false)}
+				><Icon name="close" size={13} /></button
+			>
+		</div>
+		<div class="notif-body">
+			{#each [...toasts].reverse() as t}
+				<div class="notifrow {t.kind}"><span class="tdot"></span><span>{t.text}</span></div>
+			{/each}
+			{#each logs.slice(-8).reverse() as l}
+				<div class="notifrow {l.kind}"><span class="tdot"></span><span>{l.text}</span></div>
+			{/each}
+			{#if toasts.length === 0 && logs.length === 0}<div class="oempty">
+					No new notifications.
+				</div>{/if}
+		</div>
+	</div>
+{/if}
