@@ -77,20 +77,52 @@ export const SEED: VNode[] = [
 		type: 'file',
 		mtime: Date.now(),
 		content: `<!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Neverview preview</title>
+  <title>Neverview preview — bench rig</title>
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
-  <main class="card">
-    <h1>Neverview v2</h1>
-    <p>Edit <code>/index.html</code>, <code>/style.css</code> or <code>/app.js</code> on the left. Preview updates live.</p>
-    <button id="btn">Click me</button>
-    <p id="out"></p>
+  <header class="bar">
+    <p class="brand"><span class="lamp" aria-hidden="true"></span> Neverview bench</p>
+    <button id="theme" type="button">Switch to light</button>
+  </header>
+  <main class="grid">
+    <section class="hero">
+      <h1>Small bench, live preview.</h1>
+      <p class="lede">Edit <code>/index.html</code>, <code>/style.css</code> or <code>/app.js</code> on the left. The preview on the right updates live.</p>
+      <ul class="try">
+        <li><code>app.js</code> wires every button below</li>
+        <li><code>lib.js</code> is imported as a module</li>
+        <li>Open the Console panel to see logs</li>
+      </ul>
+      <div class="readout" id="readout">
+        <span>Total presses</span>
+        <strong id="countLabel">0 presses</strong>
+      </div>
+    </section>
+    <section class="rig" aria-label="Playground">
+      <h2>Try it</h2>
+      <div class="row" role="group" aria-label="Counter">
+        <button id="minus" type="button">−</button>
+        <button id="plus" type="button" class="primary">+ Press</button>
+        <button id="reset" type="button">Reset</button>
+      </div>
+      <form id="greetForm">
+        <label for="nameInput">Say hello</label>
+        <div class="row">
+          <input id="nameInput" name="name" value="Neverview" maxlength="40" autocomplete="off" />
+          <button type="submit" class="primary">Greet</button>
+        </div>
+      </form>
+      <p class="out" id="greetOut" aria-live="polite"></p>
+      <p class="hint">Tip: press Greet, then check the Console panel below the preview.</p>
+      <button id="logBtn" type="button">Log to console</button>
+    </section>
   </main>
+  <footer>Seed project: <code>/index.html</code> + <code>/style.css</code> + <code>/app.js</code> + <code>/lib.js</code></footer>
   <script type="module" src="./app.js"></script>
 </body>
 </html>
@@ -100,42 +132,248 @@ export const SEED: VNode[] = [
 		path: '/style.css',
 		type: 'file',
 		mtime: Date.now(),
-		content: `body {
-  font-family: system-ui, sans-serif;
-  background: #0f172a;
-  color: #e2e8f0;
+		content: `:root {
+  --base: #12161f;
+  --panel: #1a212f;
+  --ink: #e8e6df;
+  --muted: #9aa3b2;
+  --lamp: #f0ad3d;
+  --ok: #5fc993;
+  --line: #2a3345;
+  --radius: 14px;
+}
+
+[data-theme="light"] {
+  --base: #f2efe7;
+  --panel: #ffffff;
+  --ink: #1c2330;
+  --muted: #5d6878;
+  --lamp: #9a6200;
+  --ok: #157a4c;
+  --line: #d9d3c4;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
   margin: 0;
-  display: grid;
-  place-items: center;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--base);
+  color: var(--ink);
   min-height: 100vh;
 }
 
-.card {
-  background: #1e293b;
-  border: 1px solid #334155;
-  border-radius: 12px;
-  padding: 32px;
-  max-width: 460px;
-  text-align: center;
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 22px;
+  border-bottom: 1px solid var(--line);
 }
 
-button {
-  background: #007acc;
-  color: #fff;
-  border: none;
-  padding: 8px 18px;
-  border-radius: 6px;
-  cursor: pointer;
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-weight: 650;
 }
 
-button:hover {
-  background: #0062a3;
+.lamp {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--lamp);
+  box-shadow: 0 0 12px var(--lamp);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 18px;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 22px;
+}
+
+.hero,
+.rig {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 22px;
+}
+
+h1 {
+  margin: 0 0 10px;
+  font-size: clamp(1.6rem, 3vw, 2.2rem);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+}
+
+h2 {
+  margin: 0 0 12px;
+  font-size: 1.05rem;
+}
+
+.lede {
+  color: var(--muted);
+  line-height: 1.55;
+  max-width: 38ch;
+  margin: 0 0 12px;
+}
+
+.try {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--muted);
+  line-height: 1.65;
+  font-size: 0.92rem;
 }
 
 code {
-  background: #020617;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85em;
+  background: rgba(127, 140, 160, 0.18);
+  border: 1px solid var(--line);
   padding: 1px 6px;
-  border-radius: 4px;
+  border-radius: 5px;
+}
+
+.readout {
+  margin-top: 18px;
+  padding: 14px 16px;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  background-image: radial-gradient(var(--line) 1px, transparent 1px);
+  background-size: 12px 12px;
+}
+
+.readout span {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.readout strong {
+  display: block;
+  margin-top: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 1.4rem;
+}
+
+.readout.pop strong {
+  animation: nudge 0.25s ease-out;
+}
+
+@keyframes nudge {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+button {
+  font: inherit;
+  color: var(--ink);
+  background: var(--base);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+
+button.primary {
+  background: var(--lamp);
+  border-color: transparent;
+  color: #1a1206;
+  font-weight: 650;
+}
+
+button:hover {
+  filter: brightness(1.08);
+}
+
+button:active {
+  transform: translateY(1px);
+}
+
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--lamp);
+  outline-offset: 2px;
+}
+
+form {
+  margin-top: 18px;
+}
+
+label {
+  display: block;
+  margin: 0 0 6px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  color: var(--ink);
+  background: var(--base);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 8px 10px;
+}
+
+.out {
+  min-height: 1.5em;
+  margin: 10px 0 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--ok);
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+#logBtn {
+  margin-top: 12px;
+}
+
+footer {
+  padding: 0 22px 28px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+@media (max-width: 720px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
 }
 `
 	},
@@ -143,13 +381,63 @@ code {
 		path: '/app.js',
 		type: 'file',
 		mtime: Date.now(),
-		content: `import { greet } from './lib.js';
-const btn = document.getElementById('btn');
-const out = document.getElementById('out');
-btn?.addEventListener('click', () => {
-  out.textContent = greet('Neverview');
-  console.log('button clicked');
+		content: `import { greet, formatCount } from './lib.js';
+
+let count = 0;
+const countLabel = document.getElementById('countLabel');
+const readout = document.getElementById('readout');
+const minus = document.getElementById('minus');
+const plus = document.getElementById('plus');
+const reset = document.getElementById('reset');
+const form = document.getElementById('greetForm');
+const nameInput = document.getElementById('nameInput');
+const greetOut = document.getElementById('greetOut');
+const themeBtn = document.getElementById('theme');
+const logBtn = document.getElementById('logBtn');
+
+function render(pop) {
+  countLabel.textContent = formatCount(count);
+  if (pop && readout) {
+    readout.classList.remove('pop');
+    void readout.offsetWidth;
+    readout.classList.add('pop');
+  }
+}
+
+minus?.addEventListener('click', () => {
+  count = Math.max(0, count - 1);
+  render(true);
 });
+
+plus?.addEventListener('click', () => {
+  count += 1;
+  render(true);
+});
+
+reset?.addEventListener('click', () => {
+  count = 0;
+  render(false);
+});
+
+form?.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const msg = greet(nameInput ? nameInput.value : '');
+  if (greetOut) greetOut.textContent = msg;
+  console.log(msg);
+});
+
+themeBtn?.addEventListener('click', () => {
+  const root = document.documentElement;
+  const next = root.dataset.theme === 'light' ? 'dark' : 'light';
+  root.dataset.theme = next;
+  themeBtn.textContent = next === 'light' ? 'Switch to dark' : 'Switch to light';
+});
+
+logBtn?.addEventListener('click', () => {
+  console.log('bench check:', greet('Neverview'), '-', formatCount(count));
+});
+
+render(false);
 `
 	},
 	{
@@ -157,7 +445,13 @@ btn?.addEventListener('click', () => {
 		type: 'file',
 		mtime: Date.now(),
 		content: `export function greet(name) {
-  return 'Hello from ' + name + '!';
+  const clean = String(name || '').trim() || 'Neverview';
+  return 'Hello from ' + clean + '!';
+}
+
+export function formatCount(n) {
+  const num = Number(n) || 0;
+  return num + (num === 1 ? ' press' : ' presses');
 }
 `
 	},
@@ -165,7 +459,7 @@ btn?.addEventListener('click', () => {
 		path: '/README.md',
 		type: 'file',
 		mtime: Date.now(),
-		content: `# Neverview v2\n\nClient-side VSCode-like HTML preview.\n\n- Files live in memory + localStorage\n- Monaco is bundled from the monaco-editor npm package\n- Preview resolves relative imports via blob URLs\n`
+		content: '# Neverview v2 - seed bench\n\nSmall interactive starter. Edit files on the left, preview updates live.\n\n- index.html - header, hero and playground layout\n- style.css - bench theme, dark and light via data-theme\n- app.js - counter, greeter form, theme toggle, console demo\n- lib.js - greet(name) and formatCount(n), imported by app.js\n\nTry: press +, submit the greeter, toggle the theme, then open the Console panel below the preview.\n'
 	}
 ];
 
