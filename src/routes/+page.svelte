@@ -615,7 +615,7 @@
                     </div>
                 {/if}
                 <div class="split" bind:this={splitEl}>
-                    <div class="editorpane" style={`flex: 0 0 ${editorPct}%`}>
+                    <div class="editorpane" style={showPreview ? `flex: 0 0 ${editorPct}%` : "flex: 1 1 0%"}>
                         {#if active && filesSnap[active]}
                             <Monaco
                                 path={active}
@@ -636,30 +636,30 @@
                             </div>
                         {/if}
                     </div>
-                    <div
-                        class="sash"
-                        class:drag={dragging}
-                        role="slider"
-                        tabindex="0"
-                        aria-orientation="vertical"
-                        aria-label="Resize editor and preview"
-                        aria-valuenow={Math.round(editorPct)}
-                        aria-valuemin={15}
-                        aria-valuemax={85}
-                        bind:this={sashEl}
-                        onpointerdown={sashPointerDown}
-                        onpointermove={sashPointerMove}
-                        onpointerup={(e) => endSashDrag(e)}
-                        onpointercancel={(e) => endSashDrag(e)}
-                        ondblclick={() => (editorPct = 55)}
-                        onkeydown={(e) => {
-                            if (e.key === "ArrowLeft")
-                                editorPct = Math.max(15, editorPct - 2);
-                            if (e.key === "ArrowRight")
-                                editorPct = Math.min(85, editorPct + 2);
-                        }}
-                    ></div>
                     {#if showPreview}
+                        <div
+                            class="sash"
+                            class:drag={dragging}
+                            role="slider"
+                            tabindex="0"
+                            aria-orientation="vertical"
+                            aria-label="Resize editor and preview"
+                            aria-valuenow={Math.round(editorPct)}
+                            aria-valuemin={15}
+                            aria-valuemax={85}
+                            bind:this={sashEl}
+                            onpointerdown={sashPointerDown}
+                            onpointermove={sashPointerMove}
+                            onpointerup={(e) => endSashDrag(e)}
+                            onpointercancel={(e) => endSashDrag(e)}
+                            ondblclick={() => (editorPct = 55)}
+                            onkeydown={(e) => {
+                                if (e.key === "ArrowLeft")
+                                    editorPct = Math.max(15, editorPct - 2);
+                                if (e.key === "ArrowRight")
+                                    editorPct = Math.min(85, editorPct + 2);
+                            }}
+                        ></div>
                         <div
                             class="previewpane"
                             style={`flex: 0 0 ${100 - editorPct}%`}
