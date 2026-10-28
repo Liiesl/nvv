@@ -100,11 +100,43 @@ export const SEED: VNode[] = [
 		path: '/style.css',
 		type: 'file',
 		mtime: Date.now(),
-		content: `body { font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; margin: 0; display: grid; place-items: center; min-height: 100vh; }
-.card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 32px; max-width: 460px; text-align: center; }
-button { background: #007acc; color: #fff; border: none; padding: 8px 18px; border-radius: 6px; cursor: pointer; }
-button:hover { background: #0062a3; }
-code { background: #020617; padding: 1px 6px; border-radius: 4px; }
+		content: `body {
+  font-family: system-ui, sans-serif;
+  background: #0f172a;
+  color: #e2e8f0;
+  margin: 0;
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+}
+
+.card {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  padding: 32px;
+  max-width: 460px;
+  text-align: center;
+}
+
+button {
+  background: #007acc;
+  color: #fff;
+  border: none;
+  padding: 8px 18px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #0062a3;
+}
+
+code {
+  background: #020617;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
 `
 	},
 	{
