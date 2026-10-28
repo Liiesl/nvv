@@ -1,4 +1,4 @@
-import adapter from '@sveltejs/adapter-cloudflare';
+import adapter from '@sveltejs/adapter-static';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
 
@@ -11,10 +11,12 @@ export default defineConfig({
 					filename.split(/[/\\]/).includes('node_modules') ? undefined : true
 			},
 
-			// adapter-cloudflare builds for Cloudflare Workers Static Assets / Pages.
+			// adapter-static outputs pure static files to build/.
 			// Git integration: Framework preset SvelteKit, build `pnpm run build`,
-			// output `.svelte-kit/cloudflare`. No wrangler CLI required.
-			adapter: adapter()
+			// deploy `npx wrangler deploy` (asset-only, no worker code).
+			adapter: adapter({
+				fallback: 'index.html'
+			})
 		})
 	]
 });
