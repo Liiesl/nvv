@@ -58,8 +58,7 @@
 		type="button"
 		class="it remote"
 		title="Remote — local workspace (mock)"
-		onclick={() => ide.toast("Remote: local workspace")}
-		><span class="remote-glyph">{"<>"}</span></button
+		onclick={() => ide.toast("Remote: local workspace")}><Icon name="remote" size={13} /></button
 	>
 	<div class="sbwrap">
 		<button
@@ -71,7 +70,7 @@
 			bind:this={branchBtnEl}
 			onclick={() => toggleExclusive("branch")}
 			><Icon name="git-branch" size={13} />
-			{ide.currentBranch}{ide.isDirty ? "*" : ""}</button
+			{ide.currentBranch}{#if ide.isDirty}<Icon name="circle-filled" size={8} />{/if}</button
 		>
 		{#if ide.branchMenu}
 			<div
@@ -90,7 +89,10 @@
 							closeMenus();
 							ide.toast(`Switched to ${b} (mock)`);
 						}}
-						><span>{b}</span>{#if b === ide.currentBranch}<small>✓ current</small>{/if}</button
+						><span>{b}</span>{#if b === ide.currentBranch}<Icon
+								name="check"
+								size={12}
+							/>{/if}</button
 					>
 				{/each}
 				<div class="sep"></div>
@@ -98,7 +100,7 @@
 					onclick={() => {
 						closeMenus();
 						ide.toast("New branch is a mock");
-					}}><span>+ New Branch…</span></button
+					}}><Icon name="add" size={12} /><span>New Branch…</span></button
 				>
 			</div>
 		{/if}
@@ -108,7 +110,10 @@
 		class="it"
 		title="Sync (mock)"
 		onclick={() => ide.toast("Synced (mock) — files persist to localStorage")}
-		><Icon name="sync" size={13} /> 0↓ 1↑</button
+		><Icon name="sync" size={13} /> 0<Icon name="arrow-down" size={12} /> 1<Icon
+			name="arrow-up"
+			size={12}
+		/></button
 	>
 	<button
 		type="button"
@@ -170,14 +175,14 @@
 							ide.useSpaces = true;
 							closeMenus();
 						}}
-						><span>Spaces</span>{#if ide.useSpaces}<small>✓</small>{/if}</button
+						><span>Spaces</span>{#if ide.useSpaces}<Icon name="check" size={12} />{/if}</button
 					>
 					<button
 						onclick={() => {
 							ide.useSpaces = false;
 							closeMenus();
 						}}
-						><span>Tabs</span>{#if !ide.useSpaces}<small>✓</small>{/if}</button
+						><span>Tabs</span>{#if !ide.useSpaces}<Icon name="check" size={12} />{/if}</button
 					>
 					<div class="sep"></div>
 					{#each [2, 4, 8] as n}
@@ -186,7 +191,10 @@
 								ide.indentSize = n;
 								closeMenus();
 							}}
-							><span>{n}</span>{#if ide.indentSize === n}<small>✓</small>{/if}</button
+							><span>{n}</span>{#if ide.indentSize === n}<Icon
+									name="check"
+									size={12}
+								/>{/if}</button
 						>
 					{/each}
 				</div>
@@ -218,7 +226,7 @@
 								closeMenus();
 								ide.toast(e === "UTF-8" ? "Encoding: UTF-8" : `${e} is a mock — kept UTF-8`);
 							}}
-							><span>{e}</span>{#if e === "UTF-8"}<small>✓</small>{/if}</button
+							><span>{e}</span>{#if e === "UTF-8"}<Icon name="check" size={12} />{/if}</button
 						>
 					{/each}
 				</div>
@@ -248,7 +256,7 @@
 							ide.eol = "LF";
 							closeMenus();
 						}}
-						><span>LF</span>{#if ide.eol === "LF"}<small>✓</small>{/if}</button
+						><span>LF</span>{#if ide.eol === "LF"}<Icon name="check" size={12} />{/if}</button
 					>
 					<button
 						onclick={() => {

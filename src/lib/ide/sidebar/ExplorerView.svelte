@@ -31,7 +31,8 @@
 				<span class="ic"><FileIcon name={basename(t)} /></span>
 				<span class="nm">{basename(t)}</span>
 				<span class="opath">{t.slice(0, t.lastIndexOf("/") + 1) || "/"}</span>
-				{#if ide.dirty.has(t)}<span class="dirtymini">●</span>{:else}
+				{#if ide.dirty.has(t)}<span class="dirtymini"><Icon name="circle-filled" size={8} /></span
+					>{:else}
 					<button
 						class="x"
 						title="Close"

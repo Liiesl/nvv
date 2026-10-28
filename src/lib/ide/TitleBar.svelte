@@ -128,7 +128,10 @@
 						onclick={() => {
 							ide.toast("Workspace autosaves to localStorage");
 							ide.titleMenu = null;
-						}}><span>✓ Auto Save</span></button
+						}}
+						><span style="display:flex;align-items:center;gap:6px"
+							><Icon name="check" size={13} />Auto Save</span
+						></button
 					>
 				{:else if ide.titleMenu === "Edit"}
 					<button
@@ -179,19 +182,34 @@
 						onclick={() => {
 							ide.sidebar = !ide.sidebar;
 							ide.titleMenu = null;
-						}}><span>{ide.sidebar ? "✓" : "○"} Primary Side Bar</span> <small>Ctrl+B</small></button
+						}}
+						><span style="display:flex;align-items:center;gap:6px"
+							>{#if ide.sidebar}<Icon name="check" size={13} />{:else}<span
+									style="width:13px;height:13px;display:inline-block"
+								></span>{/if}Primary Side Bar</span
+						> <small>Ctrl+B</small></button
 					>
 					<button
 						onclick={() => {
 							ide.showPanel = !ide.showPanel;
 							ide.titleMenu = null;
-						}}><span>{ide.showPanel ? "✓" : "○"} Panel</span> <small>Ctrl+J</small></button
+						}}
+						><span style="display:flex;align-items:center;gap:6px"
+							>{#if ide.showPanel}<Icon name="check" size={13} />{:else}<span
+									style="width:13px;height:13px;display:inline-block"
+								></span>{/if}Panel</span
+						> <small>Ctrl+J</small></button
 					>
 					<button
 						onclick={() => {
 							ide.showPreview = !ide.showPreview;
 							ide.titleMenu = null;
-						}}><span>{ide.showPreview ? "✓" : "○"} Preview</span></button
+						}}
+						><span style="display:flex;align-items:center;gap:6px"
+							>{#if ide.showPreview}<Icon name="check" size={13} />{:else}<span
+									style="width:13px;height:13px;display:inline-block"
+								></span>{/if}Preview</span
+						></button
 					>
 					<button
 						onclick={() => {
@@ -204,7 +222,12 @@
 						onclick={() => {
 							ide.minimapOn = !ide.minimapOn;
 							ide.titleMenu = null;
-						}}><span>{ide.minimapOn ? "✓" : "○"} Minimap</span></button
+						}}
+						><span style="display:flex;align-items:center;gap:6px"
+							>{#if ide.minimapOn}<Icon name="check" size={13} />{:else}<span
+									style="width:13px;height:13px;display:inline-block"
+								></span>{/if}Minimap</span
+						></button
 					>
 					<button
 						onclick={() => {
@@ -355,7 +378,7 @@
 					</div>
 				{/each}
 				<button type="button" class="opt newproj" onclick={() => ide.openNewProjectDialog()}
-					>+ New project...</button
+					><Icon name="add" size={13} /> New project...</button
 				>
 			</div>
 		{/if}
@@ -371,9 +394,8 @@
 	>
 		<Icon name="search" size={13} />
 		<span class="cc-main"
-			>{#if ide.isDirty}<span class="cc-dot">●</span>{/if}{ide.active
-				? basename(ide.active)
-				: "no file"} — {ide.activeProjectName}</span
+			>{#if ide.isDirty}<span class="cc-dot"><Icon name="circle-filled" size={8} /></span
+				>{/if}{ide.active ? basename(ide.active) : "no file"} — {ide.activeProjectName}</span
 		>
 	</button>
 	<div class="actions">
@@ -413,19 +435,34 @@
 						onclick={() => {
 							ide.sidebar = !ide.sidebar;
 							ide.layoutMenu = false;
-						}}><span>{ide.sidebar ? "✓" : "○"} Primary Side Bar</span><small>Ctrl+B</small></button
+						}}
+						><span style="display:flex;align-items:center;gap:6px"
+							>{#if ide.sidebar}<Icon name="check" size={13} />{:else}<span
+									style="width:13px;height:13px;display:inline-block"
+								></span>{/if}Primary Side Bar</span
+						><small>Ctrl+B</small></button
 					>
 					<button
 						onclick={() => {
 							ide.showPanel = !ide.showPanel;
 							ide.layoutMenu = false;
-						}}><span>{ide.showPanel ? "✓" : "○"} Panel</span><small>Ctrl+J</small></button
+						}}
+						><span style="display:flex;align-items:center;gap:6px"
+							>{#if ide.showPanel}<Icon name="check" size={13} />{:else}<span
+									style="width:13px;height:13px;display:inline-block"
+								></span>{/if}Panel</span
+						><small>Ctrl+J</small></button
 					>
 					<button
 						onclick={() => {
 							ide.showPreview = !ide.showPreview;
 							ide.layoutMenu = false;
-						}}><span>{ide.showPreview ? "✓" : "○"} Preview (side)</span></button
+						}}
+						><span style="display:flex;align-items:center;gap:6px"
+							>{#if ide.showPreview}<Icon name="check" size={13} />{:else}<span
+									style="width:13px;height:13px;display:inline-block"
+								></span>{/if}Preview (side)</span
+						></button
 					>
 					<button
 						onclick={() => {
@@ -456,7 +493,7 @@
 				title="Minimize"
 				aria-label="Minimize"
 				onclick={() => ide.toast("Minimize is a mock in the browser")}
-				><span class="wl">─</span></button
+				><Icon name="chrome-minimize" size={12} /></button
 			>
 			<button
 				class="winbtn"
@@ -465,14 +502,18 @@
 				onclick={() => {
 					ide.winMax = !ide.winMax;
 					ide.toast(ide.winMax ? "Maximized (mock)" : "Restored (mock)");
-				}}><span class="wl">{ide.winMax ? "❐" : "▢"}</span></button
+				}}
+				>{#if ide.winMax}<Icon name="chrome-restore" size={12} />{:else}<Icon
+						name="chrome-maximize"
+						size={12}
+					/>{/if}</button
 			>
 			<button
 				class="winbtn close"
 				title="Close"
 				aria-label="Close"
 				onclick={() => ide.toast("Close is disabled in the browser demo")}
-				><span class="wl">✕</span></button
+				><Icon name="chrome-close" size={12} /></button
 			>
 		</div>
 	</div>

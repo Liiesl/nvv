@@ -1,5 +1,6 @@
 <script lang="ts">
 	import FileIcon from "#lib/components/FileIcon.svelte";
+	import Icon from "#lib/components/Icon.svelte";
 	import { ide } from "#lib/ide/ide.svelte.js";
 	import { languageOf } from "#lib/vfs.js";
 	import { menuKeys, watchOutside } from "#lib/ide/menus/menu.js";
@@ -36,11 +37,11 @@
 				}}
 				>{#if c.isFile}<FileIcon name={c.label} />{/if}{c.label}</button
 			>
-			{#if i < ide.crumbs.length - 1}<span class="csep">›</span>{/if}
+			{#if i < ide.crumbs.length - 1}<Icon name="chevron-right" size={12} />{/if}
 		{/each}
 		{#if ide.outline.length > 0}
 			<span class="symwrap">
-				<span class="csep">›</span>
+				<Icon name="chevron-right" size={12} />
 				<button
 					type="button"
 					class="crumb sym"
@@ -49,7 +50,9 @@
 					aria-expanded={ide.crumbSymMenu}
 					bind:this={symBtnEl}
 					onclick={() => ide.openOnly(() => (ide.crumbSymMenu = true))}
-					>⌖ {ide.outline[0]?.label ?? ""} <small>▾</small></button
+					><Icon name="target" size={13} />
+					{ide.outline[0]?.label ?? ""}
+					<Icon name="chevron-down" size={12} /></button
 				>
 				{#if ide.crumbSymMenu}
 					<div

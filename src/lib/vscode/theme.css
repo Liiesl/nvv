@@ -2387,3 +2387,77 @@ button.veil.up {
 		opacity: 1;
 	}
 }
+/* ---- SVG icon alignment (replaces glyph chars) ---- */
+.dirtydot,
+.dirtymini,
+.cc-dot {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	vertical-align: middle;
+}
+.tab .dirtydot {
+	display: none;
+}
+.tab.dirty .dirtydot {
+	display: inline-flex;
+	color: #fff;
+}
+.tab.dirty:hover .dirtydot {
+	display: none;
+}
+.openrow .dirtymini {
+	display: inline-flex;
+	color: var(--vs-warn);
+}
+.cmdcenter .cc-dot {
+	color: var(--vs-warn);
+}
+.cmdcenter .cc-main {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 4px;
+}
+.titlemenu button > span,
+.layoutmenu button > span,
+.sbmenu button > span {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+}
+.crumbs,
+.crumb,
+.symwrap,
+.prompt,
+.chanpick,
+.paneltabs button,
+.prow button,
+.replaceall,
+.opt.newproj,
+.newtab,
+.winbtn,
+.sres,
+.projrow .opt {
+	gap: 6px;
+}
+.crumbs .nv-icon,
+.symwrap .nv-icon,
+.prompt .nv-icon,
+.chanpick .nv-icon,
+.paneltabs .nv-icon,
+.prow .nv-icon,
+.sbmenu .nv-icon,
+.titlemenu .nv-icon,
+.layoutmenu .nv-icon,
+.statusbar .nv-icon {
+	flex: 0 0 auto;
+}
+.prompt,
+.chanpick,
+.paneltabs button,
+.replaceall,
+.opt.newproj {
+	display: inline-flex;
+	align-items: center;
+}

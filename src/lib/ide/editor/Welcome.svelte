@@ -1,5 +1,6 @@
 <script lang="ts">
 	import FileIcon from "#lib/components/FileIcon.svelte";
+	import Icon from "#lib/components/Icon.svelte";
 	import { ide } from "#lib/ide/ide.svelte.js";
 	import { basename } from "#lib/vfs.js";
 </script>
@@ -26,10 +27,10 @@
 		<div class="wcol">
 			<h2>Start</h2>
 			<button onclick={() => ide.doCreateFile("/", "untitled.html")}
-				><span class="wic">＋</span> New File…</button
+				><Icon name="add" size={14} /> New File…</button
 			>
 			<button onclick={() => ide.openNewProjectDialog()}
-				><span class="wic">＋</span> New Project…</button
+				><Icon name="add" size={14} /> New Project…</button
 			>
 			<button
 				onclick={() => {

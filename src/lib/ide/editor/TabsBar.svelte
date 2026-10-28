@@ -58,7 +58,7 @@
 				<span class="tabname">
 					<FileIcon name={basename(t)} />
 					<span>{basename(t)}</span>
-					<span class="dirtydot" aria-hidden="true">●</span>
+					<span class="dirtydot" aria-hidden="true"><Icon name="circle-filled" size={8} /></span>
 				</span>
 				<button
 					class="x"
@@ -75,7 +75,7 @@
 			class="newtab"
 			title="New File"
 			aria-label="New File"
-			onclick={() => ide.doCreateFile("/", "untitled.html")}><span>+</span></button
+			onclick={() => ide.doCreateFile("/", "untitled.html")}><Icon name="add" size={14} /></button
 		>
 	</div>
 	<div class="editor-actions">

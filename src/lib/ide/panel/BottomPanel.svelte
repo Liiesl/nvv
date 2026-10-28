@@ -65,7 +65,7 @@
 					onclick={() => {
 						const order = ["Preview", "Tasks", "Extensions"];
 						ide.outputChannel = order[(order.indexOf(ide.outputChannel) + 1) % order.length];
-					}}>{ide.outputChannel} ▾</button
+					}}>{ide.outputChannel} <Icon name="chevron-down" size={12} /></button
 				>
 			{/if}
 			<button class:on={ide.panelTab === "problems"} onclick={() => (ide.panelTab = "problems")}
@@ -94,7 +94,7 @@
 					onclick={() => {
 						ide.termTabs = [...ide.termTabs, `powershell (${ide.termTabs.length + 1})`];
 						ide.activeTerm = ide.termTabs.length - 1;
-					}}><span class="plussign">+</span></button
+					}}><Icon name="add" size={13} /></button
 				>
 				<button title="Clear terminal" onclick={() => (ide.termLines = [])}
 					><Icon name="trash" size={13} /></button
@@ -141,7 +141,8 @@
 						}}
 					>
 						<span class="prompt"
-							>➜ {ide.activeProjectName} [{ide.termTabs[ide.activeTerm] ?? "powershell"}]$</span
+							><Icon name="chevron-right" size={13} />
+							{ide.activeProjectName} [{ide.termTabs[ide.activeTerm] ?? "powershell"}]$</span
 						>
 						<input
 							bind:value={ide.termInput}
@@ -164,7 +165,7 @@
 							<Icon name="warning" size={13} />
 							<span class="pfile">{p.replace("Empty file: ", "")}</span>
 							<span class="pmsg">Empty file</span>
-							<small>open →</small>
+							<small>open <Icon name="arrow-right" size={12} /></small>
 						</button>
 					{/each}
 					{#each ide.logs.filter((l) => l.kind === "error") as l}

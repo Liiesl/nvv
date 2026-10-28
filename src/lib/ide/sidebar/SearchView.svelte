@@ -1,5 +1,6 @@
 <script lang="ts">
 	import FileIcon from "#lib/components/FileIcon.svelte";
+	import Icon from "#lib/components/Icon.svelte";
 	import { ide } from "#lib/ide/ide.svelte.js";
 	import { basename, writeFile } from "#lib/vfs.js";
 </script>
@@ -58,7 +59,7 @@
 					writeFile(ide.active, cur.split(ide.query).join(ide.replaceQ));
 					ide.toast(`Replaced all in ${basename(ide.active)}`);
 				}
-			}}>⇄ Replace All</button
+			}}><Icon name="replace-all" size={13} /> Replace All</button
 		>
 	</div>
 </div>
