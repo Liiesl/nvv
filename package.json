@@ -10,8 +10,7 @@
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-		"deploy": "pwd; ls node_modules/.bin | grep wrangler || echo 'NO_WRANGLER_BIN'; wrangler deploy"
+		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-cloudflare": "^8.0.1",
@@ -20,8 +19,7 @@
 		"svelte": "^5.57.1",
 		"svelte-check": "^4.6.0",
 		"typescript": "^6.0.3",
-		"vite": "^8.3.0",
-		"wrangler": "^4.153.0"
+		"vite": "^8.3.0"
 	},
 	"imports": {
 		"#lib": "./src/lib/index.js",
