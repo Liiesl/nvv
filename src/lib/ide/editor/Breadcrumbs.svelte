@@ -1,0 +1,77 @@
+<script lang="ts">
+	import FileIcon from "#lib/components/FileIcon.svelte";
+	import { ide } from "#lib/ide/ide.svelte.js";
+	import { languageOf } from "#lib/vfs.js";
+</script>
+
+{#if ide.active}
+	<div class="crumbs">
+		{#each ide.crumbs as c, i}
+			<button
+				type="button"
+				class="crumb"
+				class:file={c.isFile}
+				title={c.path}
+				onclick={() => {
+					if (c.path === "/") {
+						ide.sideView = "explorer";
+						ide.sidebar = true;
+					} else if (ide.filesSnap[c.path]?.type === "file") ide.openFile(c.path);
+					else {
+						ide.sideView = "explorer";
+						ide.sidebar = true;
+					}
+				}}
+				>{#if c.isFile}<FileIcon name={c.label} />{/if}{c.label}</button
+			>
+			{#if i < ide.crumbs.length - 1}<span class="csep">›</span>{/if}
+		{/each}
+		{#if ide.outline.length > 0}
+			<span class="symwrap">
+				<span class="csep">›</span>
+				<button
+					type="button"
+					class="crumb sym"
+					title="Go to symbol in file"
+					onclick={() => (ide.crumbSymMenu = !ide.crumbSymMenu)}
+					>⌖ {ide.outline[0]?.label ?? ""} <small>▾</small></button
+				>
+				{#if ide.crumbSymMenu}
+					<button class="veil" aria-label="Close symbols" onclick={() => (ide.crumbSymMenu = false)}
+					></button>
+					<div class="symmenu" role="menu">
+						{#each ide.outline.slice(0, 20) as o}
+							<button
+								onclick={() => {
+									ide.revealLine = 0;
+									requestAnimationFrame(() => (ide.revealLine = o.line));
+									ide.crumbSymMenu = false;
+								}}
+								><span class="okind">{o.kind}</span>
+								{o.label} <small>:{o.line}</small></button
+							>
+						{/each}
+					</div>
+				{/if}
+			</span>
+		{/if}
+		<span class="crumb-right">
+			<button
+				type="button"
+				class="mini-crumb"
+				title="Select Language Mode"
+				onclick={() => (ide.langPick = true)}>{languageOf(ide.active)}</button
+			>
+			<span>·</span>
+			<button
+				type="button"
+				class="mini-crumb"
+				title="Go to Line/Column"
+				onclick={() => {
+					ide.gotoDraft = String(ide.line);
+					ide.gotoOpen = true;
+				}}>Ln {ide.line}, Col {ide.col}</button
+			>
+		</span>
+	</div>
+{/if}
