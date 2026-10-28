@@ -9,6 +9,8 @@
 	import { PREVIEW_KEY, itemKey, fileItem, previewItem, type EditorItem } from "#lib/ide/layout.js";
 	import { menuKeys, watchOutside } from "#lib/ide/menus/menu.js";
 
+	type DropZone = "center" | "left" | "right" | "top" | "bottom";
+
 	let { groupId }: { groupId: string } = $props();
 
 	let group = $derived(ide.groups[groupId]);
@@ -24,7 +26,7 @@
 	let previewIdx = $derived<number>(group?.tabs.findIndex((t) => t.kind === "preview") ?? -1);
 
 	let previewEl = $state<PreviewApi | null>(null);
-	let hoveredZone = $state<string | null>(null);
+	let hoveredZone = $state<DropZone | null>(null);
 	let isBodyHover = $derived(ide.dropHover?.groupId === groupId && ide.dropHover?.area === "body");
 	let isTabHover = $derived(ide.dropHover?.groupId === groupId && ide.dropHover?.area === "tabs");
 	let cursor = $derived(ide.cursorFor(groupId));
@@ -151,13 +153,49 @@
 		if (hoveredZone) hoveredZone = null;
 	}
 
+	function zoneFromPointer(e: DragEvent): DropZone {
+		const el = e.currentTarget as HTMLElement | null;
+		if (!el) return "center";
+		const r = el.getBoundingClientRect();
+		if (!r.width || !r.height) return "center";
+		const x = (e.clientX - r.left) / r.width;
+		const y = (e.clientY - r.top) / r.height;
+		const EDGE = 0.22;
+		if (x < EDGE) return "left";
+		if (x > 1 - EDGE) return "right";
+		if (y < EDGE) return "top";
+		if (y > 1 - EDGE) return "bottom";
+		return "center";
+	}
+
+	function dragLabel(): string {
+		if (!ide.dragTab) return "";
+		if (ide.dragIsPreview) return `Preview: ${ide.entry}`;
+		return ide.dragTab.split("/").pop() || ide.dragTab;
+	}
+
+	function zoneHint(z: DropZone | null): string {
+		switch (z) {
+			case "left":
+				return "Split left";
+			case "right":
+				return "Split right";
+			case "top":
+				return "Split up";
+			case "bottom":
+				return "Split down";
+			default:
+				return "Move into group";
+		}
+	}
+
 	function dragItemFromState(): EditorItem | null {
 		if (!ide.dragTab) return null;
 		if (ide.dragIsPreview) return previewItem();
 		return fileItem(ide.dragTab);
 	}
 
-	function onZoneDrop(e: DragEvent, where: "center" | "left" | "right" | "top" | "bottom") {
+	function onZoneDrop(e: DragEvent, where: DropZone) {
 		e.preventDefault();
 		e.stopPropagation();
 		const from = ide.dragFromGroup;
@@ -187,22 +225,33 @@
 		onDragEnd();
 	}
 
-	function onBodyDragOver(e: DragEvent) {
-		if (!ide.dragTab) return;
-		// Keep overlay mounted for the whole drag (no show/hide flicker).
-		// Just allow the drop and hint the operation.
-		e.preventDefault();
-		if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
-	}
-
 	function onCatchDragOver(e: DragEvent) {
 		if (!ide.dragTab) return;
+		// Position-based zones (VSCode/Zed style): edges split, middle moves in.
 		e.preventDefault();
 		if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
 		const cur = ide.dropHover;
 		if (!cur || cur.groupId !== groupId || cur.area !== "body") {
 			ide.dropHover = { groupId, area: "body", index: null };
 		}
+		hoveredZone = zoneFromPointer(e);
+	}
+
+	function onBodyDrop(e: DragEvent) {
+		// Compass buttons handle their own drop; anything else uses the
+		// position-derived zone so dropping on an edge highlight just works.
+		if ((e.target as HTMLElement)?.closest?.(".compass-btn")) return;
+		e.preventDefault();
+		e.stopPropagation();
+		onZoneDrop(e, hoveredZone ?? "center");
+	}
+
+	function onCompassOver(e: DragEvent, zone: DropZone) {
+		if (!ide.dragTab) return;
+		e.preventDefault();
+		e.stopPropagation();
+		if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+		hoveredZone = zone;
 	}
 
 	function onTabHover(e: DragEvent, index: number | null) {
@@ -506,7 +555,7 @@
 
 			{#if ide.dragTab}
 				<!-- Transparent catch layer: keeps dragover alive over Monaco/iframe. -->
-				<!-- Drop grid only renders in the hovered group (no all-groups flash). -->
+				<!-- IDE-style overlay: edge highlight + centered compass (VSCode/Zed). -->
 				<!-- svelte-ignore a11y_no_static_element_interactions -->
 				<div
 					class="dragcatch"
@@ -515,63 +564,68 @@
 					tabindex="-1"
 					ondragover={onCatchDragOver}
 					ondragleave={dragLeftContainer}
-					ondrop={(e) => {
-						if ((e.target as HTMLElement)?.closest?.(".dropzone")) return;
-						e.preventDefault();
-						const from = ide.dragFromGroup;
-						const item = dragItemFromState();
-						if (from && item && from !== groupId) ide.moveTabToGroup(from, groupId, itemKey(item));
-						onDragEnd();
-					}}
+					ondrop={onBodyDrop}
 				>
 					{#if isBodyHover}
 						<div class="dropveil">
-							<div class="dropgrid">
-								<button
-									class="dropzone top"
-									class:hover={hoveredZone === "top"}
-									ondrop={(e) => onZoneDrop(e, "top")}
-									ondragover={(e) => {
-										e.preventDefault();
-										hoveredZone = "top";
-									}}>Top</button
-								>
-								<button
-									class="dropzone left"
-									class:hover={hoveredZone === "left"}
-									ondrop={(e) => onZoneDrop(e, "left")}
-									ondragover={(e) => {
-										e.preventDefault();
-										hoveredZone = "left";
-									}}>Left</button
-								>
-								<button
-									class="dropzone center"
-									class:hover={hoveredZone === "center"}
-									ondrop={(e) => onZoneDrop(e, "center")}
-									ondragover={(e) => {
-										e.preventDefault();
-										hoveredZone = "center";
-									}}>Center</button
-								>
-								<button
-									class="dropzone right"
-									class:hover={hoveredZone === "right"}
-									ondrop={(e) => onZoneDrop(e, "right")}
-									ondragover={(e) => {
-										e.preventDefault();
-										hoveredZone = "right";
-									}}>Right</button
-								>
-								<button
-									class="dropzone bottom"
-									class:hover={hoveredZone === "bottom"}
-									ondrop={(e) => onZoneDrop(e, "bottom")}
-									ondragover={(e) => {
-										e.preventDefault();
-										hoveredZone = "bottom";
-									}}>Bottom</button
-								>
+							<div class="drop-preview zone-{hoveredZone ?? 'center'}" aria-hidden="true"></div>
+							<div class="drop-widget">
+								<div class="compass" role="toolbar" aria-label="Editor drop options">
+									<button
+										type="button"
+										class="compass-btn top"
+										class:active={hoveredZone === "top"}
+										title="Split up"
+										aria-label="Split up"
+										ondragover={(e) => onCompassOver(e, "top")}
+										ondrop={(e) => onZoneDrop(e, "top")}><Icon name="arrow-up" size={14} /></button
+									>
+									<button
+										type="button"
+										class="compass-btn left"
+										class:active={hoveredZone === "left"}
+										title="Split left"
+										aria-label="Split left"
+										ondragover={(e) => onCompassOver(e, "left")}
+										ondrop={(e) => onZoneDrop(e, "left")}
+										><span class="flip-x"><Icon name="arrow-right" size={14} /></span></button
+									>
+									<button
+										type="button"
+										class="compass-btn center"
+										class:active={hoveredZone === "center"}
+										title="Move into group"
+										aria-label="Move into group"
+										ondragover={(e) => onCompassOver(e, "center")}
+										ondrop={(e) => onZoneDrop(e, "center")}
+										><span class="center-box" aria-hidden="true"></span></button
+									>
+									<button
+										type="button"
+										class="compass-btn right"
+										class:active={hoveredZone === "right"}
+										title="Split right"
+										aria-label="Split right"
+										ondragover={(e) => onCompassOver(e, "right")}
+										ondrop={(e) => onZoneDrop(e, "right")}
+										><Icon name="arrow-right" size={14} /></button
+									>
+									<button
+										type="button"
+										class="compass-btn bottom"
+										class:active={hoveredZone === "bottom"}
+										title="Split down"
+										aria-label="Split down"
+										ondragover={(e) => onCompassOver(e, "bottom")}
+										ondrop={(e) => onZoneDrop(e, "bottom")}
+										><Icon name="arrow-down" size={14} /></button
+									>
+								</div>
+								<div class="drop-hint" aria-hidden="true">
+									<span class="hint-file">{dragLabel()}</span>
+									<span class="hint-sep">·</span>
+									<span>{zoneHint(hoveredZone)}</span>
+								</div>
 							</div>
 						</div>
 					{/if}
@@ -619,56 +673,171 @@
 		/* Transparent: only catches drag over Monaco/iframe. No flash. */
 		background: transparent;
 		pointer-events: auto;
+		cursor: copy;
 	}
 	.dropveil {
 		position: absolute;
 		inset: 0;
-		background: rgba(0, 122, 204, 0.12);
+		background: rgba(0, 0, 0, 0.08);
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		pointer-events: auto;
+		pointer-events: none;
 	}
-	.dropgrid {
+	.drop-preview {
+		position: absolute;
+		background: rgba(55, 148, 255, 0.16);
+		border: 1px solid var(--vs-accent2);
+		border-radius: 6px;
+		box-shadow: inset 0 0 0 1px rgba(55, 148, 255, 0.25);
+		pointer-events: none;
+		transition: all 90ms ease;
+	}
+	.drop-preview.zone-center {
+		top: 6px;
+		right: 6px;
+		bottom: 6px;
+		left: 6px;
+	}
+	.drop-preview.zone-left {
+		top: 6px;
+		bottom: 6px;
+		left: 6px;
+		width: calc(50% - 9px);
+	}
+	.drop-preview.zone-right {
+		top: 6px;
+		right: 6px;
+		bottom: 6px;
+		width: calc(50% - 9px);
+	}
+	.drop-preview.zone-top {
+		top: 6px;
+		right: 6px;
+		left: 6px;
+		height: calc(50% - 9px);
+	}
+	.drop-preview.zone-bottom {
+		right: 6px;
+		bottom: 6px;
+		left: 6px;
+		height: calc(50% - 9px);
+	}
+	.drop-widget {
+		position: relative;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 8px;
+		pointer-events: none;
+	}
+	.compass {
 		display: grid;
-		grid-template-columns: 1fr 1fr 1fr;
-		grid-template-rows: 1fr 1fr 1fr;
+		grid-template-columns: repeat(3, 32px);
+		grid-template-rows: repeat(3, 32px);
 		gap: 4px;
-		width: 70%;
-		height: 70%;
+		padding: 8px;
+		background: var(--vs-bg2);
+		border: 1px solid var(--vs-border);
+		border-radius: 10px;
+		box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
 		pointer-events: auto;
 	}
-	.dropzone {
-		background: rgba(55, 148, 255, 0.25);
-		border: 1px dashed var(--vs-accent2);
-		color: #fff;
-		border-radius: 4px;
-		font-size: 11px;
+	.compass-btn {
+		width: 32px;
+		height: 32px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 0;
+		background: var(--vs-bg3);
+		color: var(--vs-fg-dim);
+		border: 1px solid var(--vs-border);
+		border-radius: 6px;
 		cursor: copy;
+		transition:
+			background 80ms ease,
+			color 80ms ease,
+			border-color 80ms ease,
+			transform 80ms ease;
 	}
-	.dropzone:hover,
-	.dropzone.hover {
-		background: rgba(55, 148, 255, 0.5);
+	.compass-btn:hover,
+	.compass-btn.active {
+		background: var(--vs-accent2);
+		border-color: var(--vs-accent2);
+		color: #fff;
 	}
-	.dropzone.top {
+	.compass-btn:active {
+		transform: scale(0.94);
+	}
+	.compass-btn:focus-visible {
+		outline: 1px solid var(--vs-accent2);
+		outline-offset: 1px;
+	}
+	.compass-btn.top {
 		grid-column: 2;
 		grid-row: 1;
 	}
-	.dropzone.left {
+	.compass-btn.left {
 		grid-column: 1;
 		grid-row: 2;
 	}
-	.dropzone.center {
+	.compass-btn.center {
 		grid-column: 2;
 		grid-row: 2;
 	}
-	.dropzone.right {
+	.compass-btn.right {
 		grid-column: 3;
 		grid-row: 2;
 	}
-	.dropzone.bottom {
+	.compass-btn.bottom {
 		grid-column: 2;
 		grid-row: 3;
+	}
+	.flip-x {
+		display: inline-flex;
+		transform: rotate(180deg);
+	}
+	.center-box {
+		width: 12px;
+		height: 12px;
+		border: 1.5px solid currentColor;
+		border-radius: 2px;
+	}
+	.compass-btn.center.active .center-box {
+		background: currentColor;
+	}
+	.drop-hint {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		max-width: 260px;
+		overflow: hidden;
+		white-space: nowrap;
+		font-size: 11px;
+		line-height: 1;
+		color: var(--vs-fg-dim);
+		background: var(--vs-bg2);
+		border: 1px solid var(--vs-border);
+		border-radius: 999px;
+		padding: 6px 10px;
+		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+		pointer-events: none;
+	}
+	.hint-file {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		max-width: 150px;
+		color: var(--vs-fg);
+	}
+	.hint-sep {
+		opacity: 0.5;
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.drop-preview,
+		.compass-btn {
+			transition: none;
+		}
 	}
 	.tab.previewtab {
 		font-style: normal;
@@ -676,11 +845,10 @@
 	.tabsbar.droptarget {
 		outline: 1px solid var(--vs-accent2);
 		outline-offset: -1px;
-		background: rgba(55, 148, 255, 0.12);
+		background: rgba(55, 148, 255, 0.08);
 	}
 	.tab.drophover {
-		outline: 1px solid var(--vs-accent2);
-		outline-offset: -1px;
-		background: rgba(55, 148, 255, 0.2);
+		background: rgba(55, 148, 255, 0.15);
+		box-shadow: inset 2px 0 0 var(--vs-accent2);
 	}
 </style>
