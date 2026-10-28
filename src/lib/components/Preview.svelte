@@ -9,11 +9,15 @@
         entry = "/index.html",
         auto = true,
         onLog,
+        zoomed = false,
+        onToggleZoom,
     }: {
         files: Record<string, VNode>;
         entry: string;
         auto: boolean;
         onLog: (kind: string, text: string) => void;
+        zoomed?: boolean;
+        onToggleZoom?: () => void;
     } = $props();
 
     let built: BuiltPreview | null = $state(null);
@@ -77,6 +81,16 @@
     <button class="iconbtn" onclick={refresh} title="Refresh"
         ><Icon name="refresh" /></button
     >
+    {#if onToggleZoom}
+        <button
+            class="iconbtn"
+            onclick={onToggleZoom}
+            title={zoomed ? "Exit zoom (Esc)" : "Zoom preview (same tab)"}
+            aria-label={zoomed ? "Exit preview zoom" : "Zoom preview"}
+            aria-pressed={zoomed}
+            ><Icon name={zoomed ? "fullscreen-exit" : "fullscreen"} /></button
+        >
+    {/if}
     <button class="iconbtn" onclick={openNewTab} title="Open in new tab"
         ><Icon name="link-external" /></button
     >

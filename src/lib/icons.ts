@@ -233,6 +233,22 @@ export const icons = {
       },
     ],
   },
+  fullscreen: {
+    viewBox: "0 0 16 16",
+    paths: [
+      {
+        d: "M2 2H7V4H4V7H2V2ZM9 2H14V7H12V4H9V2ZM2 9H4V12H7V14H2V9ZM12 9H14V14H9V12H12V9Z",
+      },
+    ],
+  },
+  "fullscreen-exit": {
+    viewBox: "0 0 16 16",
+    paths: [
+      {
+        d: "M5 2H7V7H2V5H5V2ZM9 2H11V5H14V7H9V2ZM2 9H7V14H5V11H2V9ZM9 9H14V11H11V14H9V9Z",
+      },
+    ],
+  },
 } as const satisfies Record<string, IconDefinition>;
 
 export type IconName = keyof typeof icons;

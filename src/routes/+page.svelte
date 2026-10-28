@@ -68,6 +68,7 @@
     let line = $state(1);
     let col = $state(1);
     let editorPct = $state(55);
+    let previewZoomed = $state(false);
     let dragging = $state(false);
     let splitEl: HTMLElement | null = $state(null);
     let sashEl: HTMLElement | null = $state(null);
@@ -200,6 +201,10 @@
     function doCreateFolder(dir: string, name: string) {
         createFolder(join(dir, name));
     }
+    function togglePreviewZoom() {
+        previewZoomed = !previewZoomed;
+        if (previewZoomed) showPreview = true;
+    }
     function sashPointerDown(e: PointerEvent) {
         if (e.pointerType === "mouse" && e.button !== 0) return;
         dragging = true;
@@ -265,7 +270,10 @@
                 e.preventDefault();
                 showPanel = !showPanel;
             }
-            if (e.key === "Escape") palette = false;
+            if (e.key === "Escape") {
+                if (previewZoomed) previewZoomed = false;
+                else palette = false;
+            }
         });
     }
 </script>
@@ -279,7 +287,7 @@
 </svelte:head>
 
 {#if browser}
-    <div class="ide">
+    <div class="ide" class:preview-zoomed={previewZoomed}>
         <div class="titlebar">
             <div class="dots">
                 <span style="background:#ff5f57"></span><span
@@ -662,6 +670,8 @@
                                 {entry}
                                 auto={autoReload}
                                 {onLog}
+                                zoomed={previewZoomed}
+                                onToggleZoom={togglePreviewZoom}
                                 bind:this={previewRef}
                             />
                         </div>
@@ -819,6 +829,22 @@
                         palette = false;
                     }}
                     ><Icon name="browser" /> Toggle preview<small>cmd</small
+                    ></button
+                >
+                <button
+                    type="button"
+                    class="opt"
+                    onclick={() => {
+                        togglePreviewZoom();
+                        palette = false;
+                    }}
+                    ><Icon
+                        name={previewZoomed
+                            ? "fullscreen-exit"
+                            : "fullscreen"}
+                    />
+                    {previewZoomed ? "Exit preview zoom" : "Zoom preview"}<small
+                        >cmd</small
                     ></button
                 >
                 <button
