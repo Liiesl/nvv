@@ -14,30 +14,24 @@ export type MonacoApi = typeof import("monaco-editor");
 let loadPromise: Promise<MonacoApi> | null = null;
 
 export function loadMonaco(): Promise<MonacoApi> {
-  if (typeof window === "undefined") return Promise.reject(new Error("ssr"));
-  if (loadPromise) return loadPromise;
-  loadPromise = (async () => {
-    (
-      self as unknown as {
-        MonacoEnvironment?: { getWorker: (_: unknown, label: string) => Worker };
-      }
-    ).MonacoEnvironment = {
-      getWorker: (_: unknown, label: string) => {
-        if (label === "json") return new JsonWorker();
-        if (label === "css" || label === "scss" || label === "less")
-          return new CssWorker();
-        if (
-          label === "html" ||
-          label === "handlebars" ||
-          label === "razor"
-        )
-          return new HtmlWorker();
-        if (label === "typescript" || label === "javascript")
-          return new TsWorker();
-        return new EditorWorker();
-      },
-    };
-    return import("monaco-editor");
-  })();
-  return loadPromise;
+	if (typeof window === "undefined") return Promise.reject(new Error("ssr"));
+	if (loadPromise) return loadPromise;
+	loadPromise = (async () => {
+		(
+			self as unknown as {
+				MonacoEnvironment?: { getWorker: (_: unknown, label: string) => Worker };
+			}
+		).MonacoEnvironment = {
+			getWorker: (_: unknown, label: string) => {
+				if (label === "json") return new JsonWorker();
+				if (label === "css" || label === "scss" || label === "less") return new CssWorker();
+				if (label === "html" || label === "handlebars" || label === "razor")
+					return new HtmlWorker();
+				if (label === "typescript" || label === "javascript") return new TsWorker();
+				return new EditorWorker();
+			},
+		};
+		return import("monaco-editor");
+	})();
+	return loadPromise;
 }

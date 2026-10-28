@@ -1,4 +1,4 @@
-import { get, writable } from 'svelte/store';
+import { get, writable } from "svelte/store";
 import {
 	LS_KEY as LEGACY_LS_KEY,
 	activePath,
@@ -8,8 +8,8 @@ import {
 	files,
 	openTabs,
 	seedFileMap,
-	type VNode
-} from '#lib/vfs.js';
+	type VNode,
+} from "#lib/vfs.js";
 
 export interface ProjectMeta {
 	id: string;
@@ -19,7 +19,7 @@ export interface ProjectMeta {
 	entry: string;
 }
 
-export type TemplateKind = 'blank' | 'seed' | 'clone';
+export type TemplateKind = "blank" | "seed" | "clone";
 
 interface ProjectBlob {
 	files: Record<string, VNode>;
@@ -27,13 +27,13 @@ interface ProjectBlob {
 	activePath: string;
 }
 
-const INDEX_KEY = 'neverview:projects:v1';
-const ACTIVE_KEY = 'neverview:activeProject:v1';
-const BLOB_PREFIX = 'neverview:project:';
+const INDEX_KEY = "neverview:projects:v1";
+const ACTIVE_KEY = "neverview:activeProject:v1";
+const BLOB_PREFIX = "neverview:project:";
 
 export const projects = writable<ProjectMeta[]>([]);
 export const activeProjectId = writable<string | null>(null);
-export const activeEntry = writable<string>('/index.html');
+export const activeEntry = writable<string>("/index.html");
 export const projectsReady = writable<boolean>(false);
 
 let didInit = false;
@@ -42,11 +42,11 @@ let saveT: ReturnType<typeof setTimeout> | null = null;
 
 function uid(): string {
 	try {
-		if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
+		if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
 	} catch {
 		/* noop */
 	}
-	return 'p-' + Date.now().toString(36) + '-' + Math.floor(Math.random() * 1e9).toString(36);
+	return "p-" + Date.now().toString(36) + "-" + Math.floor(Math.random() * 1e9).toString(36);
 }
 
 function blobKey(id: string): string {
@@ -55,12 +55,12 @@ function blobKey(id: string): string {
 
 function readIndex(): ProjectMeta[] {
 	try {
-		if (typeof localStorage === 'undefined') return [];
+		if (typeof localStorage === "undefined") return [];
 		const raw = localStorage.getItem(INDEX_KEY);
 		if (!raw) return [];
 		const parsed = JSON.parse(raw) as ProjectMeta[];
 		if (!Array.isArray(parsed)) return [];
-		return parsed.filter((p) => p && typeof p.id === 'string' && typeof p.name === 'string');
+		return parsed.filter((p) => p && typeof p.id === "string" && typeof p.name === "string");
 	} catch {
 		return [];
 	}
@@ -68,7 +68,7 @@ function readIndex(): ProjectMeta[] {
 
 function writeIndex(metas: ProjectMeta[]) {
 	try {
-		if (typeof localStorage === 'undefined') return;
+		if (typeof localStorage === "undefined") return;
 		localStorage.setItem(INDEX_KEY, JSON.stringify(metas));
 	} catch {
 		/* quota exceeded: keep in-memory */
@@ -77,16 +77,16 @@ function writeIndex(metas: ProjectMeta[]) {
 
 function readBlob(id: string): ProjectBlob | null {
 	try {
-		if (typeof localStorage === 'undefined') return null;
+		if (typeof localStorage === "undefined") return null;
 		const raw = localStorage.getItem(blobKey(id));
 		if (!raw) return null;
 		const parsed = JSON.parse(raw) as ProjectBlob;
-		if (!parsed || typeof parsed !== 'object' || !parsed.files) return null;
-		if (!parsed.files['/']) {
-			parsed.files['/'] = { path: '/', type: 'dir', content: '', mtime: Date.now() };
+		if (!parsed || typeof parsed !== "object" || !parsed.files) return null;
+		if (!parsed.files["/"]) {
+			parsed.files["/"] = { path: "/", type: "dir", content: "", mtime: Date.now() };
 		}
 		if (!Array.isArray(parsed.openTabs)) parsed.openTabs = [];
-		if (typeof parsed.activePath !== 'string') parsed.activePath = '';
+		if (typeof parsed.activePath !== "string") parsed.activePath = "";
 		return parsed;
 	} catch {
 		return null;
@@ -95,7 +95,7 @@ function readBlob(id: string): ProjectBlob | null {
 
 function writeBlobSync(id: string, blob: ProjectBlob) {
 	try {
-		if (typeof localStorage === 'undefined') return;
+		if (typeof localStorage === "undefined") return;
 		localStorage.setItem(blobKey(id), JSON.stringify(blob));
 	} catch {
 		/* quota exceeded: keep in-memory */
@@ -104,12 +104,12 @@ function writeBlobSync(id: string, blob: ProjectBlob) {
 
 function readLegacyBlob(): Record<string, VNode> | null {
 	try {
-		if (typeof localStorage === 'undefined') return null;
+		if (typeof localStorage === "undefined") return null;
 		const raw = localStorage.getItem(LEGACY_LS_KEY);
 		if (!raw) return null;
 		const parsed = JSON.parse(raw) as Record<string, VNode>;
-		if (!parsed || typeof parsed !== 'object' || !parsed['/index.html']) return null;
-		if (!parsed['/']) parsed['/'] = { path: '/', type: 'dir', content: '', mtime: Date.now() };
+		if (!parsed || typeof parsed !== "object" || !parsed["/index.html"]) return null;
+		if (!parsed["/"]) parsed["/"] = { path: "/", type: "dir", content: "", mtime: Date.now() };
 		return parsed;
 	} catch {
 		return null;
@@ -117,16 +117,16 @@ function readLegacyBlob(): Record<string, VNode> | null {
 }
 
 function firstHtml(filesMap: Record<string, VNode>): string {
-	if (filesMap['/index.html']?.type === 'file') return '/index.html';
+	if (filesMap["/index.html"]?.type === "file") return "/index.html";
 	const html = Object.keys(filesMap)
-		.filter((p) => filesMap[p]?.type === 'file' && p.endsWith('.html'))
+		.filter((p) => filesMap[p]?.type === "file" && p.endsWith(".html"))
 		.sort();
-	return html[0] ?? '/index.html';
+	return html[0] ?? "/index.html";
 }
 
 function schedulePersist() {
 	if (!didInit || isLoading) return;
-	if (typeof localStorage === 'undefined') return;
+	if (typeof localStorage === "undefined") return;
 	if (saveT) clearTimeout(saveT);
 	saveT = setTimeout(() => {
 		persistCurrentSync();
@@ -135,8 +135,8 @@ function schedulePersist() {
 
 function notifyPreview(id: string) {
 	try {
-		if (typeof BroadcastChannel === 'undefined') return;
-		const ch = new BroadcastChannel('neverview:preview');
+		if (typeof BroadcastChannel === "undefined") return;
+		const ch = new BroadcastChannel("neverview:preview");
 		ch.postMessage({ projectId: id, rev: Date.now() });
 		ch.close();
 	} catch {
@@ -162,7 +162,7 @@ function persistCurrentSync() {
 		projects.set(next);
 		writeIndex(next);
 		try {
-			if (typeof localStorage !== 'undefined') localStorage.setItem(ACTIVE_KEY, id);
+			if (typeof localStorage !== "undefined") localStorage.setItem(ACTIVE_KEY, id);
 		} catch {
 			/* noop */
 		}
@@ -179,7 +179,7 @@ function applySnapshot(id: string, meta: ProjectMeta, blob: ProjectBlob) {
 		activeProjectId.set(id);
 		dirtyPaths.set(new Set());
 		try {
-			if (typeof localStorage !== 'undefined') localStorage.setItem(ACTIVE_KEY, id);
+			if (typeof localStorage !== "undefined") localStorage.setItem(ACTIVE_KEY, id);
 		} catch {
 			/* noop */
 		}
@@ -190,7 +190,7 @@ function applySnapshot(id: string, meta: ProjectMeta, blob: ProjectBlob) {
 
 export function initProjects() {
 	if (didInit) return;
-	if (typeof window === 'undefined') return;
+	if (typeof window === "undefined") return;
 	didInit = true;
 
 	let metas = readIndex();
@@ -200,10 +200,12 @@ export function initProjects() {
 		if (legacy) {
 			const id = uid();
 			const now = Date.now();
-			const entry = legacy['/index.html'] ? '/index.html' : firstHtml(legacy);
-			const tabs = legacy[entry] ? [entry] : [Object.keys(legacy).find((p) => legacy[p].type === 'file') ?? entry];
+			const entry = legacy["/index.html"] ? "/index.html" : firstHtml(legacy);
+			const tabs = legacy[entry]
+				? [entry]
+				: [Object.keys(legacy).find((p) => legacy[p].type === "file") ?? entry];
 			const active = tabs[0] ?? entry;
-			metas = [{ id, name: 'My first project', createdAt: now, updatedAt: now, entry }];
+			metas = [{ id, name: "My first project", createdAt: now, updatedAt: now, entry }];
 			writeIndex(metas);
 			writeBlobSync(id, { files: legacy, openTabs: tabs, activePath: active });
 			try {
@@ -214,12 +216,12 @@ export function initProjects() {
 		} else {
 			const id = uid();
 			const now = Date.now();
-			metas = [{ id, name: 'Demo', createdAt: now, updatedAt: now, entry: '/index.html' }];
+			metas = [{ id, name: "Demo", createdAt: now, updatedAt: now, entry: "/index.html" }];
 			writeIndex(metas);
 			writeBlobSync(id, {
 				files: seedFileMap(),
-				openTabs: ['/index.html'],
-				activePath: '/index.html'
+				openTabs: ["/index.html"],
+				activePath: "/index.html",
 			});
 		}
 	}
@@ -238,8 +240,8 @@ export function initProjects() {
 		const meta = metas.find((m) => m.id === activeId)!;
 		const blob = readBlob(activeId) ?? {
 			files: seedFileMap(),
-			openTabs: ['/index.html'],
-			activePath: '/index.html'
+			openTabs: ["/index.html"],
+			activePath: "/index.html",
 		};
 		// Ensure entry file exists; fall back to first html.
 		if (!blob.files[meta.entry]) {
@@ -248,7 +250,7 @@ export function initProjects() {
 		if (!blob.files[blob.activePath]?.type) {
 			blob.activePath = meta.entry;
 		}
-		if (!blob.openTabs.includes(blob.activePath) && blob.files[blob.activePath]?.type === 'file') {
+		if (!blob.openTabs.includes(blob.activePath) && blob.files[blob.activePath]?.type === "file") {
 			blob.openTabs = [...blob.openTabs, blob.activePath];
 		}
 		if (blob.openTabs.length === 0) blob.openTabs = [meta.entry];
@@ -289,25 +291,25 @@ export function setProjectEntry(entry: string) {
 	notifyPreview(id);
 }
 
-export function createProject(name: string, template: TemplateKind = 'seed'): string {
+export function createProject(name: string, template: TemplateKind = "seed"): string {
 	const clean = name.trim() || defaultProjectName();
 	const id = uid();
 	const now = Date.now();
 
 	let blob: ProjectBlob;
-	if (template === 'blank') {
+	if (template === "blank") {
 		const fm = blankFileMap();
-		blob = { files: fm, openTabs: ['/index.html'], activePath: '/index.html' };
-	} else if (template === 'clone') {
+		blob = { files: fm, openTabs: ["/index.html"], activePath: "/index.html" };
+	} else if (template === "clone") {
 		const fm = cloneFileMap(get(files));
 		const tabs = [...get(openTabs)];
 		let active = get(activePath);
 		if (!fm[active]?.type) active = firstHtml(fm);
-		if (!tabs.includes(active) && fm[active]?.type === 'file') tabs.push(active);
+		if (!tabs.includes(active) && fm[active]?.type === "file") tabs.push(active);
 		blob = { files: fm, openTabs: tabs.length ? tabs : [active], activePath: active };
 	} else {
 		const fm = seedFileMap();
-		blob = { files: fm, openTabs: ['/index.html'], activePath: '/index.html' };
+		blob = { files: fm, openTabs: ["/index.html"], activePath: "/index.html" };
 	}
 
 	const entry = firstHtml(blob.files);
@@ -347,15 +349,15 @@ export function duplicateProject(id: string): string | null {
 	const now = Date.now();
 	const meta: ProjectMeta = {
 		id: nid,
-		name: src.name + ' copy',
+		name: src.name + " copy",
 		createdAt: now,
 		updatedAt: now,
-		entry: src.entry
+		entry: src.entry,
 	};
 	writeBlobSync(nid, {
 		files: cloneFileMap(srcBlob.files),
 		openTabs: [...srcBlob.openTabs],
-		activePath: srcBlob.activePath
+		activePath: srcBlob.activePath,
 	});
 	persistCurrentSync();
 	const next = [meta, ...get(projects)];
@@ -364,7 +366,7 @@ export function duplicateProject(id: string): string | null {
 	applySnapshot(nid, meta, {
 		files: cloneFileMap(srcBlob.files),
 		openTabs: [...srcBlob.openTabs],
-		activePath: srcBlob.activePath
+		activePath: srcBlob.activePath,
 	});
 	return nid;
 }
@@ -375,7 +377,7 @@ export function deleteProject(id: string) {
 	const wasActive = get(activeProjectId) === id;
 	if (wasActive) persistCurrentSync();
 	try {
-		if (typeof localStorage !== 'undefined') localStorage.removeItem(blobKey(id));
+		if (typeof localStorage !== "undefined") localStorage.removeItem(blobKey(id));
 	} catch {
 		/* noop */
 	}
@@ -383,11 +385,17 @@ export function deleteProject(id: string) {
 	if (next.length === 0) {
 		const nid = uid();
 		const now = Date.now();
-		const meta: ProjectMeta = { id: nid, name: 'Demo', createdAt: now, updatedAt: now, entry: '/index.html' };
+		const meta: ProjectMeta = {
+			id: nid,
+			name: "Demo",
+			createdAt: now,
+			updatedAt: now,
+			entry: "/index.html",
+		};
 		const blob: ProjectBlob = {
 			files: seedFileMap(),
-			openTabs: ['/index.html'],
-			activePath: '/index.html'
+			openTabs: ["/index.html"],
+			activePath: "/index.html",
 		};
 		writeBlobSync(nid, blob);
 		next = [meta];
@@ -402,8 +410,8 @@ export function deleteProject(id: string) {
 		const meta = next[0];
 		const blob = readBlob(meta.id) ?? {
 			files: seedFileMap(),
-			openTabs: ['/index.html'],
-			activePath: '/index.html'
+			openTabs: ["/index.html"],
+			activePath: "/index.html",
 		};
 		applySnapshot(meta.id, meta, blob);
 	}
@@ -422,7 +430,7 @@ export function switchProject(id: string) {
 
 export function clearAllProjects() {
 	try {
-		if (typeof localStorage === 'undefined') return;
+		if (typeof localStorage === "undefined") return;
 		const metas = readIndex();
 		for (const m of metas) localStorage.removeItem(blobKey(m.id));
 		localStorage.removeItem(INDEX_KEY);

@@ -1,6 +1,6 @@
-import adapter from '@sveltejs/adapter-static';
-import { sveltekit } from '@sveltejs/kit/vite';
-import { defineConfig } from 'vite';
+import adapter from "@sveltejs/adapter-static";
+import { sveltekit } from "@sveltejs/kit/vite";
+import { defineConfig } from "vite";
 
 export default defineConfig({
 	plugins: [
@@ -8,15 +8,15 @@ export default defineConfig({
 			compilerOptions: {
 				// Force runes mode for the project, except for libraries. Can be removed in svelte 6.
 				runes: ({ filename }) =>
-					filename.split(/[/\\]/).includes('node_modules') ? undefined : true
+					filename.split(/[/\\]/).includes("node_modules") ? undefined : true,
 			},
 
 			// adapter-static outputs pure static files to build/.
 			// Git integration: Framework preset SvelteKit, build `pnpm run build`,
 			// deploy `npx wrangler deploy` (asset-only, no worker code).
 			adapter: adapter({
-				fallback: 'index.html'
-			})
-		})
-	]
+				fallback: "index.html",
+			}),
+		}),
+	],
 });
