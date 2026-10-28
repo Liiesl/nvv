@@ -14,20 +14,49 @@
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	let editor: any = null;
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	let monacoInstance: any = null;
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	let model: any = null;
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	let contentSub: any = null;
 	let failed = $state('');
+	let ready = $state(false);
 	let currentPath = '';
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	const viewStates = new Map<string, any>();
 	let ro: ResizeObserver | null = null;
 
-	function setModel(monaco: unknown, p: string, value: string) {
+	function setModel(p: string, value: string) {
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const m = monaco as any;
-		if (model) model.dispose();
+		const m = monacoInstance as any;
+		if (!m || !editor) return;
+		if (currentPath) {
+			try {
+				const vs = editor.saveViewState?.();
+				if (vs) viewStates.set(currentPath, vs);
+			} catch { /* noop */ }
+		}
+		try { contentSub?.dispose?.(); } catch { /* noop */ }
+		contentSub = null;
+		if (model) {
+			try { model.dispose(); } catch { /* noop */ }
+			model = null;
+		}
 		const uri = m.Uri.parse('inmemory://' + p);
-		model = m.editor.createModel(value, languageOf(p), uri);
-		model.onDidChangeContent(() => onChange(model.getValue()));
+		try {
+			const existing = m.editor.getModel(uri);
+			if (existing) existing.dispose();
+		} catch { /* noop */ }
+		model = m.editor.createModel(value ?? '', languageOf(p), uri);
+		contentSub = model.onDidChangeContent(() => {
+			try { onChange(model.getValue()); } catch { /* noop */ }
+		});
 		editor.setModel(model);
 		currentPath = p;
+		try {
+			const vs = viewStates.get(p);
+			if (vs) editor.restoreViewState?.(vs);
+		} catch { /* noop */ }
 	}
 
 	onMount(() => {
@@ -36,6 +65,7 @@
 			try {
 				const monaco = (await loadMonaco()) as any;
 				if (dead || !host) return;
+				monacoInstance = monaco;
 				editor = monaco.editor.create(host, {
 					theme: 'vs-dark',
 					fontSize: 13,
@@ -48,9 +78,10 @@
 				editor.onDidChangeCursorPosition((e: { position: { lineNumber: number; column: number } }) =>
 					onCursor?.(e.position.lineNumber, e.position.column)
 				);
-				setModel(monaco, path, content);
-				ro = new ResizeObserver(() => editor?.layout());
+				setModel(path, content);
+				ro = new ResizeObserver(() => { try { editor?.layout?.(); } catch { /* noop */ } });
 				if (host) ro.observe(host);
+				ready = true;
 			} catch {
 				failed = 'Monaco CDN failed to load. Check network.';
 			}
@@ -62,27 +93,24 @@
 	});
 
 	$effect(() => {
-		// switch file
-		if (editor && path !== currentPath) {
-			const monaco = (window as unknown as { monaco: unknown }).monaco;
-			if (monaco) setModel(monaco, path, content);
-		}
-	});
-
-	$effect(() => {
-		// external content update (e.g. reset) without clobbering cursor when equal
-		if (model && model.getValue() !== content && document.activeElement?.tagName !== 'TEXTAREA') {
-			// only push when change came from outside and editor not focused typing;
-			// cheap guard: if diff is large (file switch already handled), update.
-			if (Math.abs(model.getValue().length - content.length) > 2 || !editor?.hasTextFocus?.()) {
-				model.pushEditOperations([], [{ range: model.getFullModelRange(), text: content }], () => null);
-			}
+		if (!ready) return;
+		const p = path;
+		const v = content;
+		if (!editor || !monacoInstance) return;
+		if (p !== currentPath) {
+			setModel(p, v);
+		} else if (model && model.getValue() !== v) {
+			try {
+				model.pushEditOperations([], [{ range: model.getFullModelRange(), text: v ?? '' }], () => null);
+			} catch { /* noop */ }
 		}
 	});
 
 	onDestroy(() => {
-		try { model?.dispose(); } catch { /* noop */ }
-		try { editor?.dispose(); } catch { /* noop */ }
+		try { contentSub?.dispose?.(); } catch { /* noop */ }
+		try { model?.dispose?.(); } catch { /* noop */ }
+		try { editor?.dispose?.(); } catch { /* noop */ }
+		try { ro?.disconnect(); } catch { /* noop */ }
 	});
 </script>
 

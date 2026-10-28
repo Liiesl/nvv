@@ -5,6 +5,8 @@
 	import Monaco from '#lib/components/Monaco.svelte';
 	import Preview from '#lib/components/Preview.svelte';
 	import Explorer from '#lib/components/Explorer.svelte';
+	import Icon from '#lib/components/Icon.svelte';
+	import FileIcon from '#lib/components/FileIcon.svelte';
 
 	let filesSnap = $state<Record<string, VNode>>({});
 	let active = $state('/index.html');
@@ -26,6 +28,8 @@
 	let col = $state(1);
 	let editorPct = $state(55);
 	let dragging = $state(false);
+	let splitEl: HTMLElement | null = $state(null);
+	let sashEl: HTMLElement | null = $state(null);
 	let previewRef = $state<{ refresh: () => void; openNewTab: () => void } | null>(null);
 
 	$effect(() => {
@@ -78,19 +82,39 @@
 	function doCreateFolder(dir: string, name: string) {
 		createFolder(join(dir, name));
 	}
-	function sashDown(e: MouseEvent) {
+	function sashPointerDown(e: PointerEvent) {
+		if (e.pointerType === 'mouse' && e.button !== 0) return;
 		dragging = true;
 		e.preventDefault();
-		const move = (ev: MouseEvent) => {
-			if (!dragging) return;
-			const el = document.querySelector('.split') as HTMLElement | null;
-			if (!el) return;
-			const r = el.getBoundingClientRect();
-			editorPct = Math.min(85, Math.max(15, ((ev.clientX - r.left) / r.width) * 100));
-		};
-		const up = () => { dragging = false; window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
-		window.addEventListener('mousemove', move);
-		window.addEventListener('mouseup', up);
+		try { sashEl?.setPointerCapture?.(e.pointerId); } catch { /* noop */ }
+		try {
+			document.body.style.userSelect = 'none';
+			document.body.style.cursor = 'col-resize';
+		} catch { /* noop */ }
+		applySashMove(e.clientX);
+	}
+	function applySashMove(clientX: number) {
+		const el = splitEl;
+		if (!el) return;
+		const r = el.getBoundingClientRect();
+		if (!r.width) return;
+		editorPct = Math.min(85, Math.max(15, ((clientX - r.left) / r.width) * 100));
+	}
+	function sashPointerMove(e: PointerEvent) {
+		if (!dragging) return;
+		e.preventDefault();
+		applySashMove(e.clientX);
+	}
+	function endSashDrag(e?: PointerEvent) {
+		if (!dragging) return;
+		dragging = false;
+		try {
+			document.body.style.userSelect = '';
+			document.body.style.cursor = '';
+		} catch { /* noop */ }
+		try {
+			if (e && sashEl?.hasPointerCapture?.(e.pointerId)) sashEl?.releasePointerCapture?.(e.pointerId);
+		} catch { /* noop */ }
 	}
 
 	if (browser) {
@@ -116,19 +140,19 @@
 		<div class="menu"><span>File</span><span>Edit</span><span>View</span><span>Run</span><span>Help</span></div>
 		<div class="ttl">Neverview v2 — {active || 'no file'} — CDN Monaco + virtual FS</div>
 		<div class="actions">
-			<button class="btn small ghost" onclick={() => { previewRef?.refresh(); }}>Run ▶</button>
-			<button class="btn small" onclick={() => previewRef?.openNewTab()}>Open preview ↗</button>
+			<button class="btn small ghost" onclick={() => { previewRef?.refresh(); }}><Icon name="play" size={14} /> Run</button>
+			<button class="btn small" onclick={() => previewRef?.openNewTab()}><Icon name="link-external" size={14} /> Open preview</button>
 		</div>
 	</div>
 
 	<div class="workbench">
 		<div class="activity">
-			<button class:on={sideView === 'explorer'} title="Explorer (Ctrl+Shift+E)" onclick={() => { sideView = 'explorer'; sidebar = true; }}>📁</button>
-			<button class:on={sideView === 'search'} title="Search (Ctrl+Shift+F)" onclick={() => { sideView = 'search'; sidebar = true; }}>🔍</button>
-			<button title="Toggle preview" onclick={() => (showPreview = !showPreview)}>🌐</button>
-			<button class:on={sideView === 'settings'} title="Settings" onclick={() => { sideView = 'settings'; sidebar = true; }}>⚙️</button>
+			<button class:on={sideView === 'explorer'} title="Explorer (Ctrl+Shift+E)" aria-label="Explorer" onclick={() => { sideView = 'explorer'; sidebar = true; }}><Icon name="files" size={22} /></button>
+			<button class:on={sideView === 'search'} title="Search (Ctrl+Shift+F)" aria-label="Search" onclick={() => { sideView = 'search'; sidebar = true; }}><Icon name="search" size={22} /></button>
+			<button title="Toggle preview" aria-label="Toggle preview" onclick={() => (showPreview = !showPreview)}><Icon name="browser" size={22} /></button>
+			<button class:on={sideView === 'settings'} title="Settings" aria-label="Settings" onclick={() => { sideView = 'settings'; sidebar = true; }}><Icon name="settings-gear" size={22} /></button>
 			<div class="sp"></div>
-			<button title="Command palette (Ctrl+P)" onclick={() => (palette = true)}>⌘</button>
+			<button title="Command palette (Ctrl+P)" aria-label="Command palette" onclick={() => (palette = true)}><Icon name="record-keys" size={22} /></button>
 		</div>
 
 		{#if sidebar}
@@ -136,14 +160,14 @@
 			<div class="side-head"><span>{sideView.toUpperCase()}</span>
 				<span class="icons">
 					{#if sideView === 'explorer'}
-						<button class="iconbtn" title="New file" onclick={() => doCreateFile('/', 'untitled.html')}>＋</button>
-						<button class="iconbtn" title="Reset workspace" onclick={() => { if (confirm('Reset workspace to seed files?')) resetWorkspace(); }}>⟲</button>
+						<button class="iconbtn" title="New file" onclick={() => doCreateFile('/', 'untitled.html')}><Icon name="new-file" /></button>
+						<button class="iconbtn" title="Reset workspace" onclick={() => { if (confirm('Reset workspace to seed files?')) resetWorkspace(); }}><Icon name="refresh" /></button>
 					{/if}
 				</span>
 			</div>
 			<div class="side-body">
 				{#if sideView === 'explorer'}
-					<div class="sec-title">▾ Workspace (localStorage)</div>
+					<div class="sec-title"><Icon name="chevron-down" size={14} /> Workspace (localStorage)</div>
 					<Explorer files={filesSnap} active={active}
 						onOpen={openFile}
 						onCreateFile={doCreateFile} onCreateFolder={doCreateFolder}
@@ -176,16 +200,19 @@
 				{#each tabs as t}
 					<div class="tab" class:on={t === active} role="tab" tabindex="0" aria-selected={t === active}
 						onclick={() => openFile(t)} onkeydown={(e) => activateOnKey(e, () => openFile(t))}>
-						<span>{dirty.has(t) ? '●' : ''} {basename(t)}</span>
-						<button class="x" onclick={(e) => { e.stopPropagation(); closeTab(t); }}>✕</button>
+						<span class="tabname">
+							{#if dirty.has(t)}<Icon name="circle-filled" size={8} class="dirtydot" />{/if}
+							<span>{basename(t)}</span>
+						</span>
+						<button class="x" title="Close" aria-label="Close {basename(t)}" onclick={(e) => { e.stopPropagation(); closeTab(t); }}><Icon name="close" size={14} /></button>
 					</div>
 				{/each}
 			</div>
 			{#if active}
 				<div class="crumbs"><span>{active.split('/').slice(0, -1).join(' › ') || '/'}</span><b>{basename(active)}</b><span style="margin-left:auto">{languageOf(active)} · Ln {line}, Col {col}</span></div>
 			{/if}
-			<div class="split">
-				<div class="editorpane" style={`flex-basis:${editorPct}%`}>
+			<div class="split" bind:this={splitEl}>
+				<div class="editorpane" style={`flex: 0 0 ${editorPct}%`}>
 					{#if active && filesSnap[active]}
 						<Monaco path={active} content={content} onChange={onEdit} onCursor={(l: number, c: number) => { line = l; col = c; }} />
 					{:else}
@@ -194,14 +221,22 @@
 				</div>
 				<div class="sash" class:drag={dragging} role="slider" tabindex="0" aria-orientation="vertical"
 					aria-label="Resize editor and preview" aria-valuenow={Math.round(editorPct)} aria-valuemin={15} aria-valuemax={85}
-					onmousedown={sashDown}
+					bind:this={sashEl}
+					onpointerdown={sashPointerDown}
+					onpointermove={sashPointerMove}
+					onpointerup={(e) => endSashDrag(e)}
+					onpointercancel={(e) => endSashDrag(e)}
+					ondblclick={() => (editorPct = 55)}
 					onkeydown={(e) => { if (e.key === 'ArrowLeft') editorPct = Math.max(15, editorPct - 2); if (e.key === 'ArrowRight') editorPct = Math.min(85, editorPct + 2); }}></div>
 				{#if showPreview}
-				<div class="previewpane" style={`flex-basis:${100 - editorPct}%`}>
+				<div class="previewpane" style={`flex: 0 0 ${100 - editorPct}%`} class:dragging>
 					<Preview files={filesSnap} entry={entry} auto={autoReload} onLog={onLog} bind:this={previewRef} />
 				</div>
 				{/if}
 			</div>
+			{#if dragging}
+				<div class="dragveil" aria-hidden="true"></div>
+			{/if}
 			{#if showPanel}
 			<div class="panel">
 				<div class="paneltabs">
@@ -209,7 +244,7 @@
 					<button class:on={panelTab === 'problems'} onclick={() => (panelTab = 'problems')}>Problems ({problems.length})</button>
 					<span style="flex:1"></span>
 					<button onclick={() => (logs = [])}>Clear</button>
-					<button onclick={() => (showPanel = false)}>✕</button>
+					<button onclick={() => (showPanel = false)} title="Close panel" aria-label="Close panel"><Icon name="close" size={14} /></button>
 				</div>
 				<div class="panelbody">
 					{#if panelTab === 'console'}
@@ -226,13 +261,13 @@
 	</div>
 
 	<div class="statusbar">
-		<span class="it">🌿 main*</span>
-		<button type="button" class="it" onclick={() => { if (confirm('Reset workspace?')) resetWorkspace(); }}>⟲ {Object.keys(filesSnap).length} files</button>
+		<span class="it"><Icon name="git-branch" size={14} /> main*</span>
+		<button type="button" class="it" onclick={() => { if (confirm('Reset workspace?')) resetWorkspace(); }}><Icon name="refresh" size={14} /> {Object.keys(filesSnap).length} files</button>
 		<span class="right">
 			<span class="it">{active ? languageOf(active) : '--'}</span>
 			<span class="it">Ln {line}, Col {col}</span>
 			<span class="it">CDN monaco {`0.52.2`}</span>
-			<span class="it">CF worker ✓</span>
+			<span class="it"><Icon name="check" size={14} /> CF worker</span>
 		</span>
 	</div>
 </div>
@@ -246,10 +281,10 @@
 		<input use:autofocus placeholder="> Type file name or command" bind:value={paletteQ}
 			onkeydown={(e) => { if (e.key === 'Enter' && paletteFiles[0]) { openFile(paletteFiles[0]); palette = false; } }} />
 		<div class="opts">
-			{#each paletteFiles as p}<button type="button" class="opt" onclick={() => { openFile(p); palette = false; }}>📄 {p}<small>file</small></button>{/each}
-			<button type="button" class="opt" onclick={() => { showPreview = !showPreview; palette = false; }}>🌐 Toggle preview<small>cmd</small></button>
-			<button type="button" class="opt" onclick={() => { previewRef?.openNewTab(); palette = false; }}>↗ Open preview in new tab<small>cmd</small></button>
-			<button type="button" class="opt" onclick={() => { if (confirm('Reset?')) resetWorkspace(); palette = false; }}>⟲ Reset workspace<small>cmd</small></button>
+			{#each paletteFiles as p}<button type="button" class="opt" onclick={() => { openFile(p); palette = false; }}><FileIcon name={basename(p)} /> {p}<small>file</small></button>{/each}
+			<button type="button" class="opt" onclick={() => { showPreview = !showPreview; palette = false; }}><Icon name="browser" /> Toggle preview<small>cmd</small></button>
+			<button type="button" class="opt" onclick={() => { previewRef?.openNewTab(); palette = false; }}><Icon name="link-external" /> Open preview in new tab<small>cmd</small></button>
+			<button type="button" class="opt" onclick={() => { if (confirm('Reset?')) resetWorkspace(); palette = false; }}><Icon name="refresh" /> Reset workspace<small>cmd</small></button>
 		</div>
 	</div>
 </div>

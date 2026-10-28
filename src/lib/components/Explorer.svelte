@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { buildTree, basename, type VNode } from '#lib/vfs.js';
+	import Icon from './Icon.svelte';
+	import FileIcon from './FileIcon.svelte';
 
 	let { files, active, onOpen, onCreateFile, onCreateFolder, onRename, onDelete }: {
 		files: Record<string, VNode>;
@@ -45,17 +47,6 @@
 		}
 		renaming = null;
 	}
-	function iconFor(name: string, type: string): string {
-		if (type === 'dir') return expanded.has(name) ? '📂' : '📁';
-		const e = name.split('.').pop()?.toLowerCase();
-		if (e === 'html') return '🌐';
-		if (e === 'css') return '🎨';
-		if (e === 'js' || e === 'ts') return '📜';
-		if (e === 'json') return '🧾';
-		if (e === 'md') return '📝';
-		return '📄';
-	}
-
 	function autofocus(el: HTMLInputElement) {
 		el.focus();
 	}
@@ -76,12 +67,12 @@
 					onclick={() => toggle(n.path)}
 					onkeydown={(e) => onRowKey(e, () => toggle(n.path))}
 					oncontextmenu={(e) => { e.preventDefault(); ctx = { x: e.clientX, y: e.clientY, path: n.path, type: 'dir' }; }}>
-					<span class="car">{expanded.has(n.path) ? '▾' : '▸'}</span>
-					<span class="ic">{iconFor(n.path, 'dir')}</span>
+					<span class="car"><Icon name={expanded.has(n.path) ? 'chevron-down' : 'chevron-right'} size={14} /></span>
+					<span class="ic"><FileIcon name={n.name} type="dir" expanded={expanded.has(n.path)} /></span>
 					<span class="nm">{n.path === '/' ? 'EXPLORER' : basename(n.path)}</span>
 					<span class="rowact">
-						<button class="iconbtn" title="New file" onclick={(e) => { e.stopPropagation(); startCreate(n.path, 'file'); }}>＋</button>
-						<button class="iconbtn" title="New folder" onclick={(e) => { e.stopPropagation(); startCreate(n.path, 'dir'); }}>📁</button>
+						<button class="iconbtn" title="New file" onclick={(e) => { e.stopPropagation(); startCreate(n.path, 'file'); }}><Icon name="new-file" /></button>
+						<button class="iconbtn" title="New folder" onclick={(e) => { e.stopPropagation(); startCreate(n.path, 'dir'); }}><Icon name="new-folder" /></button>
 					</span>
 				</div>
 				{#if creating?.dir === n.path}
@@ -106,7 +97,7 @@
 					onkeydown={(e) => onRowKey(e, () => onOpen(n.path))}
 					ondblclick={() => { renaming = n.path; draft = basename(n.path); }}
 					oncontextmenu={(e) => { e.preventDefault(); ctx = { x: e.clientX, y: e.clientY, path: n.path, type: 'file' }; }}>
-					<span class="ic">{iconFor(n.path, 'file')}</span>
+					<span class="ic"><FileIcon name={n.name} type="file" /></span>
 					{#if renaming === n.path}
 						<input use:autofocus value={draft} oninput={(e) => (draft = (e.target as HTMLInputElement).value)}
 							onclick={(e) => e.stopPropagation()}
@@ -135,10 +126,10 @@
 	></button>
 	<div class="ctx" role="menu" style={`left:${ctx.x}px;top:${ctx.y}px`}>
 		{#if ctx.type === 'dir'}
-			<button onclick={() => { startCreate(ctx!.path, 'file'); ctx = null; }}>New File</button>
-			<button onclick={() => { startCreate(ctx!.path, 'dir'); ctx = null; }}>New Folder</button>
+			<button onclick={() => { startCreate(ctx!.path, 'file'); ctx = null; }}><Icon name="new-file" /> New File</button>
+			<button onclick={() => { startCreate(ctx!.path, 'dir'); ctx = null; }}><Icon name="new-folder" /> New Folder</button>
 		{/if}
-		<button onclick={() => { renaming = ctx!.path; draft = basename(ctx!.path); ctx = null; }}>Rename</button>
-		<button class="danger" onclick={() => { onDelete(ctx!.path); ctx = null; }}>Delete</button>
+		<button onclick={() => { renaming = ctx!.path; draft = basename(ctx!.path); ctx = null; }}><Icon name="edit" /> Rename</button>
+		<button class="danger" onclick={() => { onDelete(ctx!.path); ctx = null; }}><Icon name="trash" /> Delete</button>
 	</div>
 {/if}

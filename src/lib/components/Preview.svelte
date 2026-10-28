@@ -2,6 +2,7 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { buildPreview, type BuiltPreview } from '#lib/preview.js';
 	import type { VNode } from '#lib/vfs.js';
+	import Icon from './Icon.svelte';
 
 	let { files, entry = '/index.html', auto = true, onLog }: {
 		files: Record<string, VNode>;
@@ -54,8 +55,8 @@
 <div class="pvbar">
 	<span>Preview: {entry}</span>
 	<span class="url">{built?.entryUrl ?? ''}</span>
-	<button class="iconbtn" onclick={refresh} title="Refresh">⟳</button>
-	<button class="iconbtn" onclick={openNewTab} title="Open in new tab">↗</button>
+	<button class="iconbtn" onclick={refresh} title="Refresh"><Icon name="refresh" /></button>
+	<button class="iconbtn" onclick={openNewTab} title="Open in new tab"><Icon name="link-external" /></button>
 </div>
 {#if built}
 	<iframe class="pvframe" bind:this={frame} title="preview" src={built.entryUrl} sandbox="allow-scripts allow-same-origin allow-modals allow-forms allow-popups"></iframe>
