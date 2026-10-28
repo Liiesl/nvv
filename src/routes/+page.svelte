@@ -8,6 +8,10 @@
         dirtyPaths,
         openFile,
         closeTab,
+        closeOthers,
+        closeToRight,
+        closeAll,
+        reorderTabs,
         createFile,
         createFolder,
         renamePath,
@@ -54,17 +58,32 @@
     let renameTarget = $state<string | null>(null);
     let renameDraft = $state("");
 
-    let sideView = $state<"explorer" | "search" | "settings">("explorer");
+    type SideView =
+        "explorer" | "search" | "scm" | "debug" | "ext" | "settings";
+    let sideView = $state<SideView>("explorer");
     let sidebar = $state(true);
+    let sidebarW = $state(268);
+    let sideDragging = $state(false);
+    let sideSashEl: HTMLElement | null = $state(null);
     let showPreview = $state(true);
     let autoReload = $state(true);
+    let minimapOn = $state(true);
+    let fontSize = $state(13);
     let showPanel = $state(true);
-    let panelTab = $state<"console" | "problems">("console");
+    let panelTab = $state<"console" | "output" | "problems" | "terminal">(
+        "console",
+    );
+    let panelH = $state(168);
+    let panelMax = $state(false);
+    let panelDragging = $state(false);
+    let panelFilter = $state("");
     let logs = $state<{ kind: string; text: string }[]>([]);
     let entry = $state("/index.html");
     let query = $state("");
+    let replaceQ = $state("");
     let palette = $state(false);
     let paletteQ = $state("");
+    let paletteSel = $state(0);
     let line = $state(1);
     let col = $state(1);
     let editorPct = $state(55);
@@ -72,6 +91,25 @@
     let dragging = $state(false);
     let splitEl: HTMLElement | null = $state(null);
     let sashEl: HTMLElement | null = $state(null);
+    let titleMenu = $state<string | null>(null);
+    let tabCtx = $state<{ x: number; y: number; path: string } | null>(null);
+    let editorCtx = $state<{ x: number; y: number } | null>(null);
+    let sideMenu = $state(false);
+    let collapseNonce = $state(0);
+    let outlineOpen = $state(true);
+    let timelineOpen = $state(false);
+    let langPick = $state(false);
+    let gotoOpen = $state(false);
+    let gotoDraft = $state("");
+    let revealLine = $state(0);
+    let commitMsg = $state("");
+    let termLines = $state<{ text: string; kind: string }[]>([
+        { text: "neverview terminal — type `help`", kind: "info" },
+    ]);
+    let termInput = $state("");
+    let toasts = $state<{ id: number; text: string; kind: string }[]>([]);
+    let dragTab = $state<string | null>(null);
+    let toastSeq = 0;
     let previewRef = $state<{
         refresh: () => void;
         openNewTab: () => void;
@@ -81,14 +119,20 @@
         null,
     );
 
+    function toast(text: string, kind = "info") {
+        toastSeq += 1;
+        const id = toastSeq;
+        toasts = [...toasts.slice(-3), { id, text, kind }];
+        setTimeout(() => {
+            toasts = toasts.filter((t) => t.id !== id);
+        }, 3400);
+    }
+
     function handleInspectSelect(
         info: import("#lib/inspect.js").InspectPayload | null,
     ) {
         inspectTarget = info;
         if (!info) return;
-        // Inspected DOM comes from the entry HTML. If the user is looking
-        // at another file that doesn't contain the element, jump to entry
-        // so Monaco can reveal the source.
         if (active !== entry) {
             const cur = filesSnap[active]?.content ?? "";
             const needle = info.id ? info.id : `<${info.tag}`;
@@ -97,8 +141,6 @@
     }
 
     function handleInspectClearFromEditor() {
-        // User clicked/typed elsewhere in Monaco: drop the transient
-        // highlight on both sides so nothing looks stuck.
         inspectTarget = null;
         try {
             previewRef?.clearInspectSelection();
@@ -140,6 +182,9 @@
             .filter((p) => p.endsWith(".html"))
             .sort(),
     );
+    const fileCount = $derived(
+        Object.values(filesSnap).filter((n) => n.type === "file").length,
+    );
     const activeProject = $derived(
         projectsSnap.find((p) => p.id === activeProjectIdSnap) ?? null,
     );
@@ -149,26 +194,229 @@
             .filter(([, n]) => n.type === "file" && !n.content.trim())
             .map(([p]) => `Empty file: ${p}`),
     );
-    const searchHits = $derived(
-        !query.trim()
-            ? []
-            : Object.entries(filesSnap)
-                  .filter(
-                      ([, n]) =>
-                          n.type === "file" &&
-                          n.content.toLowerCase().includes(query.toLowerCase()),
-                  )
-                  .slice(0, 50),
+    const errCount = $derived(logs.filter((l) => l.kind === "error").length);
+    const warnCount = $derived(
+        logs.filter((l) => l.kind === "warn").length + problems.length,
+    );
+    const isDirty = $derived(dirty.has(active));
+    const outline = $derived.by(() => {
+        const src = content ?? "";
+        const out: { line: number; label: string; kind: string }[] = [];
+        const lines = src.split("\n");
+        const lang = languageOf(active);
+        for (let i = 0; i < lines.length; i++) {
+            const ln = lines[i];
+            if (lang === "html" || lang === "xml") {
+                const m = ln.match(
+                    /<(h[1-6]|section|header|footer|main|div|button|form)[^>]*>([^<]{1,60})/i,
+                );
+                if (m)
+                    out.push({
+                        line: i + 1,
+                        label: `${m[1]} — ${(m[2] ?? "").trim().slice(0, 42) || "(block)"}`,
+                        kind: "tag",
+                    });
+                continue;
+            }
+            if (lang === "css") {
+                const m = ln.match(/^\s*([.#]?[A-Za-z][\w\-.,\s:#>]*)\s*\{/);
+                if (m)
+                    out.push({
+                        line: i + 1,
+                        label: m[1].trim().slice(0, 48),
+                        kind: "css",
+                    });
+                continue;
+            }
+            const m =
+                ln.match(
+                    /^\s*(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)/,
+                ) ??
+                ln.match(/^\s*class\s+([A-Za-z_$][\w$]*)/) ??
+                ln.match(
+                    /^\s*(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?\(/,
+                );
+            if (m?.[1])
+                out.push({
+                    line: i + 1,
+                    label: String(m[1]).slice(0, 48),
+                    kind: lang,
+                });
+        }
+        return out.slice(0, 60);
+    });
+    const crumbs = $derived.by(() => {
+        if (!active)
+            return [] as { label: string; path: string; isFile: boolean }[];
+        const parts = active.split("/").filter(Boolean);
+        const acc: { label: string; path: string; isFile: boolean }[] = [
+            { label: activeProjectName, path: "/", isFile: false },
+        ];
+        let cur = "";
+        parts.forEach((seg, i) => {
+            cur += "/" + seg;
+            acc.push({ label: seg, path: cur, isFile: i === parts.length - 1 });
+        });
+        return acc;
+    });
+    const searchDetailed = $derived.by(() => {
+        const q = query.trim().toLowerCase();
+        if (!q) return [] as { path: string; line: number; text: string }[];
+        const hits: { path: string; line: number; text: string }[] = [];
+        for (const [p, n] of Object.entries(filesSnap)) {
+            if (n.type !== "file") continue;
+            const lines = n.content.split("\n");
+            for (let i = 0; i < lines.length && hits.length < 60; i++) {
+                if (lines[i].toLowerCase().includes(q)) {
+                    hits.push({
+                        path: p,
+                        line: i + 1,
+                        text: lines[i].trim().slice(0, 100),
+                    });
+                }
+            }
+            if (hits.length >= 60) break;
+        }
+        return hits;
+    });
+    const paletteIsCmd = $derived(paletteQ.startsWith(">"));
+    const paletteCmdQ = $derived(
+        paletteIsCmd
+            ? paletteQ.slice(1).trim().toLowerCase()
+            : paletteQ.trim().toLowerCase(),
     );
     const paletteFiles = $derived(
         Object.keys(filesSnap)
             .filter(
                 (p) =>
                     filesSnap[p].type === "file" &&
-                    p.toLowerCase().includes(paletteQ.toLowerCase()),
+                    p
+                        .toLowerCase()
+                        .includes(paletteIsCmd ? "" : paletteQ.toLowerCase()),
             )
-            .slice(0, 20),
+            .slice(0, paletteIsCmd ? 5 : 12),
     );
+    const allCommands = $derived.by(() => {
+        const cmds = [
+            {
+                id: "new-file",
+                label: "File: New File",
+                run: () => doCreateFile("/", "untitled.html"),
+            },
+            {
+                id: "toggle-sidebar",
+                label: "View: Toggle Primary Side Bar",
+                run: () => (sidebar = !sidebar),
+            },
+            {
+                id: "toggle-panel",
+                label: "View: Toggle Panel",
+                run: () => (showPanel = !showPanel),
+            },
+            {
+                id: "toggle-preview",
+                label: "View: Toggle Preview",
+                run: () => (showPreview = !showPreview),
+            },
+            {
+                id: "zoom-preview",
+                label: previewZoomed
+                    ? "View: Exit Preview Zoom"
+                    : "View: Zoom Preview",
+                run: () => togglePreviewZoom(),
+            },
+            {
+                id: "refresh",
+                label: "Run: Refresh Preview",
+                run: () => previewRef?.refresh(),
+            },
+            {
+                id: "open-tab",
+                label: "Run: Open Preview in New Tab",
+                run: () => previewRef?.openNewTab(),
+            },
+            {
+                id: "new-project",
+                label: "Project: New Project…",
+                run: () => openNewProjectDialog(),
+            },
+            {
+                id: "close-others",
+                label: "Tab: Close Others",
+                run: () => {
+                    if (active) closeOthers(active);
+                },
+            },
+            {
+                id: "close-right",
+                label: "Tab: Close to the Right",
+                run: () => {
+                    if (active) closeToRight(active);
+                },
+            },
+            { id: "close-all", label: "Tab: Close All", run: () => closeAll() },
+            {
+                id: "goto-line",
+                label: "Go: Go to Line…",
+                run: () => {
+                    gotoDraft = String(line);
+                    gotoOpen = true;
+                },
+            },
+            {
+                id: "lang",
+                label: "Language: Change Language Mode…",
+                run: () => (langPick = true),
+            },
+            {
+                id: "terminal",
+                label: "Terminal: Focus Terminal",
+                run: () => {
+                    panelTab = "terminal";
+                    showPanel = true;
+                },
+            },
+            {
+                id: "problems",
+                label: "Problems: Focus Problems",
+                run: () => {
+                    panelTab = "problems";
+                    showPanel = true;
+                },
+            },
+            {
+                id: "reset",
+                label: "Project: Reset Files to Seed",
+                run: () => {
+                    if (confirm("Reset?")) resetWorkspace();
+                },
+            },
+        ];
+        if (!paletteCmdQ) return cmds;
+        return cmds.filter((c) => c.label.toLowerCase().includes(paletteCmdQ));
+    });
+    const paletteTotal = $derived(
+        paletteFiles.length +
+            allCommands.length +
+            projectsSnap.filter((m) =>
+                m.name.toLowerCase().includes(paletteCmdQ),
+            ).length,
+    );
+    const filteredLogs = $derived.by(() => {
+        const f = panelFilter.trim().toLowerCase();
+        let list = logs;
+        if (panelTab === "output") list = logs.filter((l) => l.kind !== "log");
+        if (panelTab === "console") list = logs;
+        if (!f) return list.slice(-120);
+        return list
+            .filter((l) => (l.kind + " " + l.text).toLowerCase().includes(f))
+            .slice(-120);
+    });
+
+    $effect(() => {
+        void paletteQ;
+        paletteSel = 0;
+    });
 
     function onEdit(v: string) {
         if (v !== filesSnap[active]?.content) writeFile(active, v);
@@ -184,16 +432,21 @@
     }
     function onLog(kind: string, text: string) {
         logs = [...logs.slice(-199), { kind, text }];
-        if (kind === "error") panelTab = "console";
+        if (kind === "error") {
+            panelTab = "console";
+            showPanel = true;
+        }
     }
     function onEntryChange(v: string) {
         setProjectEntry(v);
+        toast(`Entry → ${v}`);
     }
     function openNewProjectDialog() {
         newProjName = defaultProjectName();
         newProjTemplate = "seed";
         showNewProj = true;
         projMenu = false;
+        palette = false;
     }
     function confirmNewProject() {
         createProject(
@@ -201,6 +454,7 @@
             newProjTemplate,
         );
         showNewProj = false;
+        toast(`Project “${newProjName.trim() || "untitled"}” created`);
     }
     function startRenameProject(id: string, cur: string) {
         renameTarget = id;
@@ -215,25 +469,110 @@
     function doSwitchProject(id: string) {
         switchProject(id);
         projMenu = false;
+        palette = false;
+        toast("Project switched");
     }
     function doDeleteProject(id: string, name: string) {
         if (!confirm(`Delete project "${name}"? This cannot be undone.`))
             return;
         deleteProject(id);
         projMenu = false;
+        toast(`Deleted “${name}”`, "warn");
     }
     function doCreateFile(dir: string, name: string) {
-        createFile(
-            join(dir, name),
-            name.endsWith(".html") ? "<!-- new -->\n" : "",
-        );
+        try {
+            createFile(
+                join(dir, name),
+                name.endsWith(".html") ? "<!-- new -->\n" : "",
+            );
+            toast(`Created ${join(dir, name)}`);
+        } catch {
+            toast("File already exists", "warn");
+        }
     }
     function doCreateFolder(dir: string, name: string) {
-        createFolder(join(dir, name));
+        try {
+            createFolder(join(dir, name));
+            toast(`Created folder ${name}`);
+        } catch {
+            toast("Folder already exists", "warn");
+        }
     }
     function togglePreviewZoom() {
         previewZoomed = !previewZoomed;
         if (previewZoomed) showPreview = true;
+    }
+    function runPaletteCommand(id: string) {
+        const c = allCommands.find((x) => x.id === id);
+        c?.run();
+        palette = false;
+    }
+    function confirmGoto() {
+        const n = parseInt(gotoDraft, 10);
+        if (Number.isFinite(n) && n >= 1) {
+            revealLine = 0;
+            requestAnimationFrame(() => (revealLine = n));
+            line = n;
+            toast(`Go to line ${n}`);
+        }
+        gotoOpen = false;
+    }
+    function runTerm(cmdRaw: string) {
+        const cmd = cmdRaw.trim();
+        if (!cmd) return;
+        termLines = [
+            ...termLines.slice(-99),
+            { text: `$ ${cmd}`, kind: "cmd" },
+        ];
+        const [c, ...rest] = cmd.split(/\s+/);
+        const arg = rest.join(" ");
+        if (c === "help") {
+            termLines = [
+                ...termLines,
+                {
+                    text: "help · clear · ls · open <file> · entry · echo <text>",
+                    kind: "info",
+                },
+            ];
+        } else if (c === "clear") {
+            termLines = [];
+        } else if (c === "ls") {
+            const names = Object.keys(filesSnap)
+                .filter((p) => filesSnap[p].type === "file")
+                .sort()
+                .join("  ");
+            termLines = [
+                ...termLines,
+                { text: names || "(empty)", kind: "log" },
+            ];
+        } else if (c === "open") {
+            const target = arg.startsWith("/") ? arg : "/" + arg;
+            if (filesSnap[target]?.type === "file") {
+                openFile(target);
+                termLines = [
+                    ...termLines,
+                    { text: `opened ${target}`, kind: "ok" },
+                ];
+            } else {
+                termLines = [
+                    ...termLines,
+                    { text: `no such file: ${arg}`, kind: "error" },
+                ];
+            }
+        } else if (c === "entry") {
+            termLines = [
+                ...termLines,
+                { text: `entry = ${entry}`, kind: "log" },
+            ];
+        } else if (c === "echo") {
+            termLines = [...termLines, { text: arg, kind: "log" }];
+        } else {
+            termLines = [
+                ...termLines,
+                { text: `command not found: ${c}`, kind: "error" },
+            ];
+        }
+        termInput = "";
     }
     function sashPointerDown(e: PointerEvent) {
         if (e.pointerType === "mouse" && e.button !== 0) return;
@@ -283,6 +622,44 @@
             /* noop */
         }
     }
+    function sideSashDown(e: PointerEvent) {
+        if (e.pointerType === "mouse" && e.button !== 0) return;
+        sideDragging = true;
+        e.preventDefault();
+        try {
+            sideSashEl?.setPointerCapture?.(e.pointerId);
+        } catch {
+            /* noop */
+        }
+        document.body.style.userSelect = "none";
+        document.body.style.cursor = "col-resize";
+    }
+    function sideSashMove(e: PointerEvent) {
+        if (!sideDragging) return;
+        sidebarW = Math.min(480, Math.max(180, e.clientX - 48));
+    }
+    function sideSashUp() {
+        sideDragging = false;
+        document.body.style.userSelect = "";
+        document.body.style.cursor = "";
+    }
+    function panelSashDown(e: PointerEvent) {
+        panelDragging = true;
+        panelMax = false;
+        e.preventDefault();
+        document.body.style.userSelect = "none";
+        document.body.style.cursor = "row-resize";
+    }
+    function panelSashMove(e: PointerEvent) {
+        if (!panelDragging) return;
+        const h = window.innerHeight - e.clientY - 24;
+        panelH = Math.min(520, Math.max(100, h));
+    }
+    function panelSashUp() {
+        panelDragging = false;
+        document.body.style.userSelect = "";
+        document.body.style.cursor = "";
+    }
 
     if (browser) {
         window.addEventListener("keydown", (e) => {
@@ -290,6 +667,11 @@
             if (mod && e.key.toLowerCase() === "p" && !e.shiftKey) {
                 e.preventDefault();
                 paletteQ = "";
+                palette = true;
+            }
+            if (mod && e.shiftKey && e.key.toLowerCase() === "p") {
+                e.preventDefault();
+                paletteQ = "> ";
                 palette = true;
             }
             if (mod && e.key.toLowerCase() === "b") {
@@ -300,10 +682,42 @@
                 e.preventDefault();
                 showPanel = !showPanel;
             }
+            if (mod && e.key === "`") {
+                e.preventDefault();
+                panelTab = "terminal";
+                showPanel = !showPanel;
+            }
+            if (
+                mod &&
+                e.shiftKey &&
+                ["e", "f", "g"].includes(e.key.toLowerCase())
+            ) {
+                e.preventDefault();
+                const k = e.key.toLowerCase();
+                sideView =
+                    k === "e" ? "explorer" : k === "f" ? "search" : "scm";
+                sidebar = true;
+            }
+            if (e.key === "F5" && !e.shiftKey) {
+                // keep native reload out of the way inside editor context
+            }
             if (e.key === "Escape") {
-                if (previewZoomed) previewZoomed = false;
+                if (gotoOpen) gotoOpen = false;
+                else if (langPick) langPick = false;
+                else if (tabCtx) tabCtx = null;
+                else if (editorCtx) editorCtx = null;
+                else if (titleMenu) titleMenu = null;
+                else if (previewZoomed) previewZoomed = false;
                 else palette = false;
             }
+        });
+        window.addEventListener("pointermove", (e) => {
+            if (sideDragging) sideSashMove(e as unknown as PointerEvent);
+            if (panelDragging) panelSashMove(e as unknown as PointerEvent);
+        });
+        window.addEventListener("pointerup", () => {
+            if (sideDragging) sideSashUp();
+            if (panelDragging) panelSashUp();
         });
     }
 </script>
@@ -317,7 +731,11 @@
 </svelte:head>
 
 {#if browser}
-    <div class="ide" class:preview-zoomed={previewZoomed}>
+    <div
+        class="ide"
+        class:preview-zoomed={previewZoomed}
+        class:has-error={errCount > 0}
+    >
         <div class="titlebar">
             <div class="dots">
                 <span style="background:#ff5f57"></span><span
@@ -325,9 +743,151 @@
                 ></span><span style="background:#28c840"></span>
             </div>
             <div class="menu">
-                <span>File</span><span>Edit</span><span>View</span><span
-                    >Run</span
-                ><span>Help</span>
+                {#each ["File", "Edit", "View", "Run", "Help"] as m}
+                    <button
+                        type="button"
+                        class="menubtn"
+                        class:on={titleMenu === m}
+                        onclick={() => (titleMenu = titleMenu === m ? null : m)}
+                        >{m}</button
+                    >
+                {/each}
+                {#if titleMenu}
+                    <button
+                        class="veil"
+                        aria-label="Close menu"
+                        onclick={() => (titleMenu = null)}
+                        onkeydown={(e) => {
+                            if (e.key === "Escape") titleMenu = null;
+                        }}
+                    ></button>
+                    <div class="titlemenu" role="menu">
+                        {#if titleMenu === "File"}
+                            <button
+                                onclick={() => {
+                                    doCreateFile("/", "untitled.html");
+                                    titleMenu = null;
+                                }}>New File <small>Ctrl+N</small></button
+                            >
+                            <button
+                                onclick={() => {
+                                    openNewProjectDialog();
+                                    titleMenu = null;
+                                }}>New Project…</button
+                            >
+                            <div class="sep"></div>
+                            <button
+                                onclick={() => {
+                                    if (active) closeTab(active);
+                                    titleMenu = null;
+                                }}>Close Tab</button
+                            >
+                            <button
+                                onclick={() => {
+                                    if (active) closeOthers(active);
+                                    titleMenu = null;
+                                }}>Close Others</button
+                            >
+                            <button
+                                onclick={() => {
+                                    closeAll();
+                                    titleMenu = null;
+                                }}>Close All</button
+                            >
+                        {:else if titleMenu === "Edit"}
+                            <button
+                                onclick={() => {
+                                    paletteQ = "> ";
+                                    palette = true;
+                                    titleMenu = null;
+                                }}
+                                >Command Palette… <small>Ctrl+Shift+P</small
+                                ></button
+                            >
+                            <button
+                                onclick={() => {
+                                    gotoDraft = String(line);
+                                    gotoOpen = true;
+                                    titleMenu = null;
+                                }}>Go to Line… <small>Ctrl+G</small></button
+                            >
+                            <button
+                                onclick={() => {
+                                    langPick = true;
+                                    titleMenu = null;
+                                }}>Change Language Mode</button
+                            >
+                        {:else if titleMenu === "View"}
+                            <button
+                                onclick={() => {
+                                    sidebar = !sidebar;
+                                    titleMenu = null;
+                                }}
+                                >Toggle Primary Side Bar <small>Ctrl+B</small
+                                ></button
+                            >
+                            <button
+                                onclick={() => {
+                                    showPanel = !showPanel;
+                                    titleMenu = null;
+                                }}>Toggle Panel <small>Ctrl+J</small></button
+                            >
+                            <button
+                                onclick={() => {
+                                    showPreview = !showPreview;
+                                    titleMenu = null;
+                                }}>Toggle Preview</button
+                            >
+                            <button
+                                onclick={() => {
+                                    togglePreviewZoom();
+                                    titleMenu = null;
+                                }}>Zoom Preview</button
+                            >
+                            <button
+                                onclick={() => {
+                                    minimapOn = !minimapOn;
+                                    titleMenu = null;
+                                }}>{minimapOn ? "✓" : "○"} Minimap</button
+                            >
+                        {:else if titleMenu === "Run"}
+                            <button
+                                onclick={() => {
+                                    previewRef?.refresh();
+                                    titleMenu = null;
+                                    toast("Preview refreshed");
+                                }}>Run Preview <small>F5</small></button
+                            >
+                            <button
+                                onclick={() => {
+                                    previewRef?.openNewTab();
+                                    titleMenu = null;
+                                }}>Open Preview in New Tab</button
+                            >
+                            <button
+                                onclick={() => {
+                                    panelTab = "terminal";
+                                    showPanel = true;
+                                    titleMenu = null;
+                                }}>Focus Terminal <small>Ctrl+`</small></button
+                            >
+                        {:else}
+                            <button
+                                onclick={() => {
+                                    paletteQ = "> ";
+                                    palette = true;
+                                    titleMenu = null;
+                                }}>Keyboard Shortcuts</button
+                            >
+                            <button
+                                onclick={() => {
+                                    toast("Neverview v2 — Monaco + virtual FS");
+                                    titleMenu = null;
+                                }}>About Neverview</button
+                            >
+                        {/if}
+                    </div>
+                {/if}
             </div>
             <div class="projwrap">
                 <button
@@ -416,12 +976,36 @@
                     </div>
                 {/if}
             </div>
-            <div class="ttl">{active || "no file"} — Monaco + virtual FS</div>
+            <button
+                type="button"
+                class="cmdcenter"
+                title="Search files or run commands (Ctrl+P)"
+                onclick={() => {
+                    paletteQ = "";
+                    palette = true;
+                }}
+            >
+                <Icon name="search" size={13} />
+                <span class="cc-main"
+                    >{#if isDirty}<span class="cc-dot">●</span
+                        >{/if}{activeProjectName} — {active
+                        ? basename(active)
+                        : "no file"}</span
+                >
+                <kbd>Ctrl P</kbd>
+            </button>
             <div class="actions">
+                <button
+                    class="iconbtn"
+                    title="Customize Layout"
+                    onclick={() => (sidebar = !sidebar)}
+                    ><Icon name="split-horizontal" size={16} /></button
+                >
                 <button
                     class="btn small ghost"
                     onclick={() => {
                         previewRef?.refresh();
+                        toast("Preview refreshed");
                     }}><Icon name="play" size={14} /> Run</button
                 >
                 <button
@@ -450,13 +1034,57 @@
                     onclick={() => {
                         sideView = "search";
                         sidebar = true;
-                    }}><Icon name="search" size={22} /></button
+                    }}
+                    ><Icon name="search" size={22} />
+                    {#if query.trim()}<span class="badge">!</span>{/if}
+                </button>
+                <button
+                    class:on={sideView === "scm"}
+                    title="Source Control (Ctrl+Shift+G)"
+                    aria-label="Source Control"
+                    onclick={() => {
+                        sideView = "scm";
+                        sidebar = true;
+                    }}
+                    ><Icon name="git-branch" size={22} />
+                    {#if dirty.size > 0}<span class="badge">{dirty.size}</span
+                        >{/if}
+                </button>
+                <button
+                    class:on={sideView === "debug"}
+                    title="Run and Debug"
+                    aria-label="Run and Debug"
+                    onclick={() => {
+                        sideView = "debug";
+                        sidebar = true;
+                    }}
+                    ><Icon name="debug" size={22} />
+                    {#if errCount > 0}<span class="badge err">{errCount}</span
+                        >{/if}
+                </button>
+                <button
+                    class:on={sideView === "ext"}
+                    title="Extensions"
+                    aria-label="Extensions"
+                    onclick={() => {
+                        sideView = "ext";
+                        sidebar = true;
+                    }}><Icon name="extensions" size={22} /></button
                 >
                 <button
+                    class:on={showPreview}
                     title="Toggle preview"
                     aria-label="Toggle preview"
                     onclick={() => (showPreview = !showPreview)}
                     ><Icon name="browser" size={22} /></button
+                >
+                <div class="sp"></div>
+                <button
+                    title="Accounts"
+                    aria-label="Accounts"
+                    onclick={() =>
+                        toast("Signed in locally — no account needed")}
+                    ><Icon name="account" size={22} /></button
                 >
                 <button
                     class:on={sideView === "settings"}
@@ -467,17 +1095,24 @@
                         sidebar = true;
                     }}><Icon name="settings-gear" size={22} /></button
                 >
-                <div class="sp"></div>
                 <button
-                    title="Command palette (Ctrl+P)"
-                    aria-label="Command palette"
-                    onclick={() => (palette = true)}
-                    ><Icon name="record-keys" size={22} /></button
-                >
+                    title="Notifications"
+                    aria-label="Notifications"
+                    onclick={() => {
+                        panelTab = "problems";
+                        showPanel = true;
+                    }}
+                    ><Icon name="bell" size={22} />
+                    {#if warnCount > 0}<span class="badge">{warnCount}</span
+                        >{/if}
+                </button>
             </div>
 
             {#if sidebar}
-                <div class="sidebar">
+                <div
+                    class="sidebar"
+                    style={`flex-basis:${sidebarW}px;width:${sidebarW}px`}
+                >
                     <div class="side-head">
                         <span
                             >{sideView.toUpperCase()} · {activeProjectName}</span
@@ -489,67 +1124,322 @@
                                     title="New file"
                                     onclick={() =>
                                         doCreateFile("/", "untitled.html")}
-                                    ><Icon name="new-file" /></button
+                                    ><Icon name="new-file" size={15} /></button
                                 >
                                 <button
                                     class="iconbtn"
-                                    title="New project"
-                                    aria-label="New project"
-                                    onclick={openNewProjectDialog}
-                                    ><Icon name="new-folder" /></button
-                                >
-                                <button
-                                    class="iconbtn"
-                                    title="Reset project files"
+                                    title="New folder"
                                     onclick={() => {
-                                        if (
-                                            confirm(
-                                                `Reset project "${activeProjectName}" to seed files?`,
-                                            )
-                                        )
-                                            resetWorkspace();
-                                    }}><Icon name="refresh" /></button
+                                        doCreateFolder("/", "new-folder");
+                                    }}
+                                    ><Icon
+                                        name="new-folder"
+                                        size={15}
+                                    /></button
+                                >
+                                <button
+                                    class="iconbtn"
+                                    title="Refresh explorer"
+                                    onclick={() => toast("Explorer refreshed")}
+                                    ><Icon name="refresh" size={15} /></button
+                                >
+                                <button
+                                    class="iconbtn"
+                                    title="Collapse all"
+                                    onclick={() => (collapseNonce += 1)}
+                                    ><Icon
+                                        name="collapse-all"
+                                        size={15}
+                                    /></button
+                                >
+                                <button
+                                    class="iconbtn"
+                                    title="More actions"
+                                    onclick={() => (sideMenu = !sideMenu)}
+                                    ><Icon name="ellipsis" size={15} /></button
                                 >
                             {/if}
                         </span>
                     </div>
+                    {#if sideMenu && sideView === "explorer"}
+                        <div class="sidemenu" role="menu">
+                            <button
+                                onclick={() => {
+                                    doCreateFile("/", "untitled.html");
+                                    sideMenu = false;
+                                }}>New File</button
+                            >
+                            <button
+                                onclick={() => {
+                                    doCreateFolder("/", "new-folder");
+                                    sideMenu = false;
+                                }}>New Folder</button
+                            >
+                            <button
+                                onclick={() => {
+                                    collapseNonce += 1;
+                                    sideMenu = false;
+                                }}>Collapse All</button
+                            >
+                            <button
+                                onclick={() => {
+                                    openNewProjectDialog();
+                                    sideMenu = false;
+                                }}>New Project…</button
+                            >
+                        </div>
+                    {/if}
                     <div class="side-body">
                         {#if sideView === "explorer"}
                             <div class="sec-title">
                                 <Icon name="chevron-down" size={14} />
-                                {activeProjectName} (localStorage)
+                                {activeProjectName} · {fileCount} files
                             </div>
                             <Explorer
                                 files={filesSnap}
                                 {active}
-                                onOpen={openFile}
+                                {collapseNonce}
+                                onOpen={(p) => {
+                                    openFile(p);
+                                }}
                                 onCreateFile={doCreateFile}
                                 onCreateFolder={doCreateFolder}
                                 onRename={renamePath}
-                                onDelete={removePath}
+                                onDelete={(p) => {
+                                    removePath(p);
+                                    toast(`Deleted ${p}`, "warn");
+                                }}
                             />
+                            <button
+                                type="button"
+                                class="sec-title collapsible"
+                                onclick={() => (outlineOpen = !outlineOpen)}
+                            >
+                                <Icon
+                                    name={outlineOpen
+                                        ? "chevron-down"
+                                        : "chevron-right"}
+                                    size={14}
+                                />
+                                OUTLINE
+                                <small>{outline.length}</small>
+                            </button>
+                            {#if outlineOpen}
+                                <div class="outline">
+                                    {#each outline as o}
+                                        <button
+                                            type="button"
+                                            class="orow"
+                                            title="Go to line {o.line}"
+                                            onclick={() => {
+                                                revealLine = 0;
+                                                requestAnimationFrame(
+                                                    () => (revealLine = o.line),
+                                                );
+                                            }}
+                                        >
+                                            <span class="okind">{o.kind}</span>
+                                            <span class="olabel">{o.label}</span
+                                            >
+                                            <span class="oline">{o.line}</span>
+                                        </button>
+                                    {/each}
+                                    {#if outline.length === 0}
+                                        <div class="oempty">
+                                            No symbols in active file.
+                                        </div>
+                                    {/if}
+                                </div>
+                            {/if}
+                            <button
+                                type="button"
+                                class="sec-title collapsible"
+                                onclick={() => (timelineOpen = !timelineOpen)}
+                            >
+                                <Icon
+                                    name={timelineOpen
+                                        ? "chevron-down"
+                                        : "chevron-right"}
+                                    size={14}
+                                />
+                                TIMELINE
+                            </button>
+                            {#if timelineOpen}
+                                <div class="timeline">
+                                    <div class="tline">
+                                        <span>Project updated</span><small
+                                            >{activeProject
+                                                ? new Date(
+                                                      activeProject.updatedAt,
+                                                  ).toLocaleString()
+                                                : "—"}</small
+                                        >
+                                    </div>
+                                    <div class="tline">
+                                        <span>Entry</span><small>{entry}</small>
+                                    </div>
+                                    <div class="tline">
+                                        <span>Unsaved changes</span><small
+                                            >{dirty.size}</small
+                                        >
+                                    </div>
+                                </div>
+                            {/if}
                         {:else if sideView === "search"}
                             <div class="searchbox">
                                 <input
                                     placeholder="Search files…"
                                     bind:value={query}
                                 />
+                                <input
+                                    placeholder="Replace (Enter applies to open file)"
+                                    bind:value={replaceQ}
+                                    onkeydown={(e) => {
+                                        if (
+                                            e.key === "Enter" &&
+                                            replaceQ &&
+                                            active &&
+                                            filesSnap[active]
+                                        ) {
+                                            const cur =
+                                                filesSnap[active].content;
+                                            writeFile(
+                                                active,
+                                                cur.split(query).join(replaceQ),
+                                            );
+                                            toast(
+                                                `Replaced in ${basename(active)}`,
+                                            );
+                                        }
+                                    }}
+                                />
+                                <div class="smeta">
+                                    {searchDetailed.length} results {query
+                                        ? `for “${query}”`
+                                        : ""}
+                                </div>
                             </div>
-                            {#each searchHits as [p, n]}
+                            {#each searchDetailed as h}
                                 <button
                                     type="button"
                                     class="sres"
-                                    onclick={() => openFile(p)}
-                                    ><span>{p}</span><small
-                                        >{n.content.slice(0, 80)}</small
+                                    onclick={() => {
+                                        openFile(h.path);
+                                        revealLine = 0;
+                                        requestAnimationFrame(
+                                            () => (revealLine = h.line),
+                                        );
+                                    }}
+                                    ><span class="sfile"
+                                        ><FileIcon name={basename(h.path)} />
+                                        {h.path} <em>:{h.line}</em></span
+                                    ><small>{h.text || "(empty line)"}</small
                                     ></button
                                 >
                             {/each}
-                            {#if query && searchHits.length === 0}<div
+                            {#if query && searchDetailed.length === 0}<div
                                     class="sres"
                                 >
                                     <small>No results</small>
                                 </div>{/if}
+                        {:else if sideView === "scm"}
+                            <div class="searchbox">
+                                <div class="smeta">
+                                    SOURCE CONTROL · {dirty.size} changes
+                                </div>
+                                <input
+                                    placeholder="Message (Ctrl+Enter to commit)"
+                                    bind:value={commitMsg}
+                                />
+                                <button
+                                    class="btn small"
+                                    onclick={() => {
+                                        commitMsg = "";
+                                        toast(
+                                            dirty.size
+                                                ? `Committed ${dirty.size} file(s)`
+                                                : "Nothing to commit",
+                                        );
+                                    }}
+                                    ><Icon name="check" size={14} /> Commit</button
+                                >
+                            </div>
+                            <div class="smeta" style="padding:0 12px">
+                                Changes
+                            </div>
+                            {#each [...dirty] as d}
+                                <button
+                                    type="button"
+                                    class="sres"
+                                    onclick={() => openFile(d)}
+                                >
+                                    <span class="sfile"
+                                        ><FileIcon name={basename(d)} />
+                                        {d}</span
+                                    >
+                                    <small>M · unsaved</small>
+                                </button>
+                            {/each}
+                            {#if dirty.size === 0}<div class="sres">
+                                    <small
+                                        >No changes — working tree clean.</small
+                                    >
+                                </div>{/if}
+                        {:else if sideView === "debug"}
+                            <div class="searchbox">
+                                <div class="smeta">RUN AND DEBUG</div>
+                                <button
+                                    class="btn small"
+                                    onclick={() => {
+                                        previewRef?.refresh();
+                                        toast("Preview refreshed");
+                                    }}
+                                    ><Icon name="play" size={14} /> Start Debugging
+                                    (F5)</button
+                                >
+                                <label
+                                    >Entry HTML
+                                    <select
+                                        class="textin"
+                                        bind:value={entry}
+                                        onchange={() => onEntryChange(entry)}
+                                    >
+                                        {#each htmlFiles as h}<option value={h}
+                                                >{h}</option
+                                            >{/each}
+                                    </select>
+                                </label>
+                                <label
+                                    ><input
+                                        type="checkbox"
+                                        bind:checked={autoReload}
+                                    /> Auto-reload preview</label
+                                >
+                                <div class="smeta">
+                                    Breakpoints: none · Console: {logs.length}
+                                </div>
+                            </div>
+                        {:else if sideView === "ext"}
+                            <div class="searchbox">
+                                <div class="smeta">
+                                    EXTENSIONS · Marketplace (local mock)
+                                </div>
+                            </div>
+                            {#each [["Prettier", "Code formatter"], ["ESLint", "Problem matcher"], ["Live Preview", "Preview helper"]] as [n, d]}
+                                <div class="sres ext">
+                                    <span class="sfile"
+                                        ><Icon name="extensions" size={16} />
+                                        {n}</span
+                                    >
+                                    <small>{d}</small>
+                                    <button
+                                        class="btn small ghost"
+                                        onclick={() =>
+                                            toast(`${n} installed (mock)`)}
+                                        >Install</button
+                                    >
+                                </div>
+                            {/each}
                         {:else}
                             <div class="searchbox">
                                 <label
@@ -570,6 +1460,23 @@
                                         bind:checked={showPanel}
                                     /> Show panel</label
                                 >
+                                <label
+                                    ><input
+                                        type="checkbox"
+                                        bind:checked={minimapOn}
+                                    /> Minimap</label
+                                >
+                                <label
+                                    >Font size
+                                    <input
+                                        type="range"
+                                        min="11"
+                                        max="18"
+                                        step="1"
+                                        bind:value={fontSize}
+                                    />
+                                    <small>{fontSize}px</small>
+                                </label>
                                 <label
                                     >Entry HTML
                                     <select
@@ -599,58 +1506,194 @@
                         {/if}
                     </div>
                 </div>
+                <div
+                    class="sash side"
+                    role="slider"
+                    tabindex="0"
+                    aria-label="Resize sidebar"
+                    aria-orientation="vertical"
+                    aria-valuenow={Math.round(sidebarW)}
+                    aria-valuemin={180}
+                    aria-valuemax={480}
+                    bind:this={sideSashEl}
+                    onpointerdown={sideSashDown}
+                    ondblclick={() => (sidebarW = 268)}
+                    onkeydown={(e) => {
+                        if (e.key === "ArrowLeft")
+                            sidebarW = Math.max(180, sidebarW - 12);
+                        if (e.key === "ArrowRight")
+                            sidebarW = Math.min(480, sidebarW + 12);
+                    }}
+                ></div>
             {/if}
 
             <div class="main">
-                <div class="tabs" role="tablist">
-                    {#each tabs as t}
-                        <div
-                            class="tab"
-                            class:on={t === active}
-                            role="tab"
-                            tabindex="0"
-                            aria-selected={t === active}
-                            onclick={() => openFile(t)}
-                            onkeydown={(e) =>
-                                activateOnKey(e, () => openFile(t))}
-                        >
-                            <span class="tabname">
-                                {#if dirty.has(t)}<Icon
-                                        name="circle-filled"
-                                        size={8}
-                                        class="dirtydot"
-                                    />{/if}
-                                <span>{basename(t)}</span>
-                            </span>
-                            <button
-                                class="x"
-                                title="Close"
-                                aria-label="Close {basename(t)}"
-                                onclick={(e) => {
-                                    e.stopPropagation();
-                                    closeTab(t);
-                                }}><Icon name="close" size={14} /></button
+                <div class="tabsbar">
+                    <div class="tabs" role="tablist">
+                        {#each tabs as t}
+                            <div
+                                class="tab"
+                                class:on={t === active}
+                                class:dragging={dragTab === t}
+                                role="tab"
+                                tabindex="0"
+                                draggable="true"
+                                aria-selected={t === active}
+                                onclick={() => openFile(t)}
+                                onkeydown={(e) =>
+                                    activateOnKey(e, () => openFile(t))}
+                                onauxclick={(e) => {
+                                    if (e.button === 1) {
+                                        e.preventDefault();
+                                        closeTab(t);
+                                    }
+                                }}
+                                oncontextmenu={(e) => {
+                                    e.preventDefault();
+                                    tabCtx = {
+                                        x: e.clientX,
+                                        y: e.clientY,
+                                        path: t,
+                                    };
+                                }}
+                                ondragstart={(e) => {
+                                    dragTab = t;
+                                    try {
+                                        e.dataTransfer?.setData(
+                                            "text/plain",
+                                            t,
+                                        );
+                                    } catch {
+                                        /* noop */
+                                    }
+                                }}
+                                ondragend={() => (dragTab = null)}
+                                ondragover={(e) => e.preventDefault()}
+                                ondrop={(e) => {
+                                    e.preventDefault();
+                                    try {
+                                        const from =
+                                            e.dataTransfer?.getData(
+                                                "text/plain",
+                                            ) || dragTab;
+                                        if (from) reorderTabs(from, t);
+                                    } catch {
+                                        /* noop */
+                                    }
+                                    dragTab = null;
+                                }}
                             >
-                        </div>
-                    {/each}
+                                <span class="tabname">
+                                    <FileIcon name={basename(t)} />
+                                    <span>{basename(t)}</span>
+                                    {#if dirty.has(t)}<Icon
+                                            name="circle-filled"
+                                            size={8}
+                                            class="dirtydot"
+                                        />{/if}
+                                </span>
+                                <button
+                                    class="x"
+                                    title="Close"
+                                    aria-label="Close {basename(t)}"
+                                    onclick={(e) => {
+                                        e.stopPropagation();
+                                        closeTab(t);
+                                    }}><Icon name="close" size={13} /></button
+                                >
+                            </div>
+                        {/each}
+                    </div>
+                    <div class="editor-actions">
+                        <button
+                            class="iconbtn"
+                            title="Split preview right"
+                            onclick={() => (showPreview = !showPreview)}
+                            ><Icon name="split-horizontal" size={15} /></button
+                        >
+                        <button
+                            class="iconbtn"
+                            title="More editor actions"
+                            onclick={(e) => {
+                                const r = (
+                                    e.currentTarget as HTMLElement
+                                ).getBoundingClientRect();
+                                tabCtx = {
+                                    x: r.left - 120,
+                                    y: r.bottom + 4,
+                                    path: active,
+                                };
+                            }}><Icon name="ellipsis" size={15} /></button
+                        >
+                    </div>
                 </div>
                 {#if active}
                     <div class="crumbs">
-                        <span
-                            >{active.split("/").slice(0, -1).join(" › ") ||
-                                "/"}</span
-                        ><b>{basename(active)}</b><span style="margin-left:auto"
+                        {#each crumbs as c, i}
+                            <button
+                                type="button"
+                                class="crumb"
+                                class:file={c.isFile}
+                                title={c.path}
+                                onclick={() => {
+                                    if (c.path === "/") {
+                                        sideView = "explorer";
+                                        sidebar = true;
+                                    } else if (
+                                        filesSnap[c.path]?.type === "file"
+                                    )
+                                        openFile(c.path);
+                                    else {
+                                        sideView = "explorer";
+                                        sidebar = true;
+                                    }
+                                }}>{c.label}</button
+                            >
+                            {#if i < crumbs.length - 1}<span class="csep"
+                                    >›</span
+                                >{/if}
+                        {/each}
+                        {#if outline.length > 0}
+                            <button
+                                type="button"
+                                class="crumb sym"
+                                title="Go to symbol"
+                                onclick={() => {
+                                    sideView = "explorer";
+                                    sidebar = true;
+                                    outlineOpen = true;
+                                }}>⌖ {outline[0]?.label ?? ""}</button
+                            >
+                        {/if}
+                        <span class="crumb-right"
                             >{languageOf(active)} · Ln {line}, Col {col}</span
                         >
                     </div>
                 {/if}
                 <div class="split" bind:this={splitEl}>
-                    <div class="editorpane" style={showPreview ? `flex: 0 0 ${editorPct}%` : "flex: 1 1 0%"}>
+                    <div
+                        class="editorpane"
+                        role="group"
+                        aria-label="Editor"
+                        style={showPreview
+                            ? `flex: 0 0 ${editorPct}%`
+                            : "flex: 1 1 0%"}
+                        oncontextmenu={(e) => {
+                            const el = e.target as HTMLElement;
+                            if (el.closest(".monaco-host")) {
+                                e.preventDefault();
+                                editorCtx = { x: e.clientX, y: e.clientY };
+                            }
+                        }}
+                    >
                         {#if active && filesSnap[active]}
                             <Monaco
                                 path={active}
                                 {content}
-                                inspectTarget={inspectTarget}
+                                {fontSize}
+                                {minimapOn}
+                                {revealLine}
+                                {inspectTarget}
                                 onInspectClear={handleInspectClearFromEditor}
                                 onChange={onEdit}
                                 onCursor={(l: number, c: number) => {
@@ -659,12 +1702,45 @@
                                 }}
                             />
                         {:else}
-                            <div class="empty">
-                                <h2>No file open</h2>
-                                <p>
-                                    <kbd>Ctrl+P</kbd> to open a file, or create one
-                                    in Explorer.
-                                </p>
+                            <div class="welcome">
+                                <div class="wcol">
+                                    <h2>Start</h2>
+                                    <button
+                                        onclick={() =>
+                                            doCreateFile("/", "untitled.html")}
+                                        >＋ New File…</button
+                                    >
+                                    <button onclick={openNewProjectDialog}
+                                        >＋ New Project…</button
+                                    >
+                                    <button
+                                        onclick={() => {
+                                            paletteQ = "";
+                                            palette = true;
+                                        }}
+                                        >Open File… <small>Ctrl+P</small
+                                        ></button
+                                    >
+                                </div>
+                                <div class="wcol">
+                                    <h2>Recent</h2>
+                                    {#each tabs.slice(-5).reverse() as t}
+                                        <button onclick={() => openFile(t)}
+                                            ><FileIcon name={basename(t)} />
+                                            {t}</button
+                                        >
+                                    {/each}
+                                    {#if tabs.length === 0}<p>
+                                            No recent files.
+                                        </p>{/if}
+                                </div>
+                                <div class="wcol">
+                                    <h2>Shortcuts</h2>
+                                    <p><kbd>Ctrl P</kbd> quick open</p>
+                                    <p><kbd>Ctrl B</kbd> sidebar</p>
+                                    <p><kbd>Ctrl J</kbd> panel</p>
+                                    <p><kbd>Ctrl `</kbd> terminal</p>
+                                </div>
                             </div>
                         {/if}
                     </div>
@@ -715,46 +1791,150 @@
                     <div class="dragveil" aria-hidden="true"></div>
                 {/if}
                 {#if showPanel}
-                    <div class="panel">
+                    <div
+                        class="psash"
+                        role="slider"
+                        tabindex="0"
+                        aria-label="Resize panel"
+                        aria-orientation="horizontal"
+                        aria-valuenow={Math.round(panelH)}
+                        aria-valuemin={100}
+                        aria-valuemax={520}
+                        onpointerdown={panelSashDown}
+                        ondblclick={() => (panelH = 168)}
+                    ></div>
+                    <div
+                        class="panel"
+                        style={panelMax
+                            ? "flex-basis:45vh"
+                            : `flex-basis:${panelH}px`}
+                    >
                         <div class="paneltabs">
                             <button
                                 class:on={panelTab === "console"}
                                 onclick={() => (panelTab = "console")}
-                                >Console ({logs.length})</button
+                                ><Icon name="debug" size={13} /> Debug Console ({logs.length})</button
+                            >
+                            <button
+                                class:on={panelTab === "output"}
+                                onclick={() => (panelTab = "output")}
+                                >Output ({logs.filter((l) => l.kind !== "log")
+                                    .length})</button
                             >
                             <button
                                 class:on={panelTab === "problems"}
                                 onclick={() => (panelTab = "problems")}
-                                >Problems ({problems.length})</button
+                                ><Icon
+                                    name={problems.length || errCount
+                                        ? "error"
+                                        : "check"}
+                                    size={13}
+                                /> Problems ({problems.length +
+                                    errCount})</button
+                            >
+                            <button
+                                class:on={panelTab === "terminal"}
+                                onclick={() => (panelTab = "terminal")}
+                                ><Icon name="terminal" size={13} /> Terminal</button
                             >
                             <span style="flex:1"></span>
-                            <button onclick={() => (logs = [])}>Clear</button>
+                            {#if panelTab !== "terminal"}
+                                <input
+                                    class="panelfilter"
+                                    placeholder="Filter…"
+                                    bind:value={panelFilter}
+                                />
+                                <button
+                                    onclick={() => (logs = [])}
+                                    title="Clear"
+                                    ><Icon name="trash" size={13} /> Clear</button
+                                >
+                            {/if}
+                            <button
+                                title={panelMax ? "Restore" : "Maximize panel"}
+                                onclick={() => (panelMax = !panelMax)}
+                                ><Icon
+                                    name={panelMax
+                                        ? "fullscreen-exit"
+                                        : "fullscreen"}
+                                    size={13}
+                                /></button
+                            >
                             <button
                                 onclick={() => (showPanel = false)}
-                                title="Close panel"
+                                title="Close panel (Ctrl+J)"
                                 aria-label="Close panel"
                                 ><Icon name="close" size={14} /></button
                             >
                         </div>
                         <div class="panelbody">
-                            {#if panelTab === "console"}
-                                {#each logs as l}<div class="logline {l.kind}">
-                                        [{l.kind}] {l.text}
-                                    </div>{/each}
-                                {#if logs.length === 0}<div
+                            {#if panelTab === "terminal"}
+                                <div
+                                    class="term"
+                                    role="log"
+                                    aria-label="Terminal"
+                                >
+                                    {#each termLines.slice(-80) as tl}
+                                        <div class="logline {tl.kind}">
+                                            {tl.text}
+                                        </div>
+                                    {/each}
+                                    <form
+                                        class="termin"
+                                        onsubmit={(e) => {
+                                            e.preventDefault();
+                                            runTerm(termInput);
+                                        }}
+                                    >
+                                        <span class="prompt"
+                                            >➜ {activeProjectName}$</span
+                                        >
+                                        <input
+                                            bind:value={termInput}
+                                            placeholder="help · ls · open /index.html"
+                                            aria-label="Terminal input"
+                                        />
+                                    </form>
+                                </div>
+                            {:else if panelTab === "problems"}
+                                {#each problems as p}
+                                    <button
+                                        type="button"
+                                        class="logline warn clickable"
+                                        onclick={() =>
+                                            openFile(
+                                                p.replace("Empty file: ", ""),
+                                            )}
+                                    >
+                                        <Icon name="warning" size={13} />
+                                        {p} <small>— open file</small>
+                                    </button>
+                                {/each}
+                                {#each logs.filter((l) => l.kind === "error") as l}
+                                    <div class="logline error">
+                                        <Icon name="error" size={13} />
+                                        {l.text}
+                                    </div>
+                                {/each}
+                                {#if problems.length === 0 && errCount === 0}<div
                                         class="logline info"
                                     >
-                                        console output from the preview iframe
-                                        appears here.
+                                        <Icon name="check" size={13} /> No problems
+                                        — working tree clean.
                                     </div>{/if}
                             {:else}
-                                {#each problems as p}<div class="logline warn">
-                                        {p}
+                                {#each filteredLogs as l}<div
+                                        class="logline {l.kind}"
+                                    >
+                                        <span class="ltime">{l.kind}</span>
+                                        {l.text}
                                     </div>{/each}
-                                {#if problems.length === 0}<div
+                                {#if filteredLogs.length === 0}<div
                                         class="logline info"
                                     >
-                                        No problems.
+                                        {panelTab === "output"
+                                            ? "Output from build + warnings appears here."
+                                            : "console output from the preview iframe appears here. Run the preview to see logs."}
                                     </div>{/if}
                             {/if}
                         </div>
@@ -764,8 +1944,34 @@
         </div>
 
         <div class="statusbar">
-            <span class="it"
-                ><Icon name="git-branch" size={14} /> {activeProjectName}*</span
+            <button
+                type="button"
+                class="it"
+                title="Project branch"
+                onclick={() => (projMenu = !projMenu)}
+                ><Icon name="git-branch" size={13} />
+                {activeProjectName}{isDirty ? " ●" : ""}</button
+            >
+            <button
+                type="button"
+                class="it"
+                title="Sync (mock)"
+                onclick={() =>
+                    toast("Synced (mock) — files persist to localStorage")}
+                ><Icon name="sync" size={13} /> 0↓ 1↑</button
+            >
+            <button
+                type="button"
+                class="it"
+                title="Errors and warnings — open Problems"
+                onclick={() => {
+                    panelTab = "problems";
+                    showPanel = true;
+                }}
+                ><Icon name="error" size={13} />
+                {errCount}
+                <Icon name="warning" size={13} />
+                {warnCount}</button
             >
             <button
                 type="button"
@@ -774,17 +1980,147 @@
                     if (confirm(`Reset project "${activeProjectName}"?`))
                         resetWorkspace();
                 }}
-                ><Icon name="refresh" size={14} />
-                {Object.keys(filesSnap).length} files · {projectsSnap.length} projects</button
+                ><Icon name="refresh" size={13} />
+                {fileCount} files · {projectsSnap.length} projects</button
             >
             <span class="right">
-                <span class="it">{active ? languageOf(active) : "--"}</span>
-                <span class="it">Ln {line}, Col {col}</span>
-                <span class="it">monaco 0.57.0</span>
-                <span class="it"><Icon name="check" size={14} /> CF worker</span
+                <button
+                    type="button"
+                    class="it"
+                    title="Go to line"
+                    onclick={() => {
+                        gotoDraft = String(line);
+                        gotoOpen = true;
+                    }}>Ln {line}, Col {col}</button
+                >
+                <button type="button" class="it" title="Indentation"
+                    >Spaces: 2</button
+                >
+                <button type="button" class="it" title="Encoding">UTF-8</button>
+                <button type="button" class="it" title="Line endings">LF</button
+                >
+                <button
+                    type="button"
+                    class="it"
+                    title="Change language mode"
+                    onclick={() => (langPick = true)}
+                    >{active ? languageOf(active) : "--"}</button
+                >
+                <button
+                    type="button"
+                    class="it"
+                    title="Toggle preview"
+                    onclick={() => (showPreview = !showPreview)}
+                    ><Icon name="browser" size={13} /> Go Live</button
+                >
+                <button
+                    type="button"
+                    class="it"
+                    title="Notifications"
+                    onclick={() => {
+                        panelTab = "problems";
+                        showPanel = true;
+                    }}><Icon name="bell" size={13} /></button
                 >
             </span>
         </div>
+    </div>
+{/if}
+
+{#if tabCtx}
+    <button
+        class="veil"
+        aria-label="Close tab menu"
+        onclick={() => (tabCtx = null)}
+        onkeydown={(e) => {
+            if (e.key === "Escape") tabCtx = null;
+        }}
+    ></button>
+    <div
+        class="ctx"
+        role="menu"
+        style={`left:${Math.min(tabCtx.x, window.innerWidth - 220)}px;top:${tabCtx.y}px`}
+    >
+        <button
+            onclick={() => {
+                closeTab(tabCtx!.path);
+                tabCtx = null;
+            }}><Icon name="close" size={14} /> Close</button
+        >
+        <button
+            onclick={() => {
+                closeOthers(tabCtx!.path);
+                tabCtx = null;
+                toast("Closed others");
+            }}>Close Others</button
+        >
+        <button
+            onclick={() => {
+                closeToRight(tabCtx!.path);
+                tabCtx = null;
+            }}>Close to the Right</button
+        >
+        <button
+            onclick={() => {
+                closeAll();
+                tabCtx = null;
+            }}>Close All</button
+        >
+        <button
+            onclick={() => {
+                try {
+                    navigator.clipboard.writeText(tabCtx!.path);
+                    toast("Path copied");
+                } catch {
+                    /* noop */
+                }
+                tabCtx = null;
+            }}>Copy Path</button
+        >
+    </div>
+{/if}
+
+{#if editorCtx}
+    <button
+        class="veil"
+        aria-label="Close editor menu"
+        onclick={() => (editorCtx = null)}
+        onkeydown={(e) => {
+            if (e.key === "Escape") editorCtx = null;
+        }}
+    ></button>
+    <div
+        class="ctx"
+        role="menu"
+        style={`left:${editorCtx.x}px;top:${editorCtx.y}px`}
+    >
+        <button
+            onclick={() => {
+                paletteQ = "> ";
+                palette = true;
+                editorCtx = null;
+            }}>Command Palette…</button
+        >
+        <button
+            onclick={() => {
+                gotoDraft = String(line);
+                gotoOpen = true;
+                editorCtx = null;
+            }}>Go to Line…</button
+        >
+        <button
+            onclick={() => {
+                langPick = true;
+                editorCtx = null;
+            }}>Change Language Mode</button
+        >
+        <button
+            onclick={() => {
+                previewRef?.refresh();
+                editorCtx = null;
+                toast("Preview refreshed");
+            }}><Icon name="play" size={14} /> Run Preview</button
+        >
     </div>
 {/if}
 
@@ -809,100 +2145,196 @@
         >
             <input
                 use:autofocus
-                placeholder="> Type file name or command"
+                placeholder={paletteIsCmd
+                    ? "> Type a command"
+                    : "Type file name, or > for commands"}
                 bind:value={paletteQ}
                 onkeydown={(e) => {
-                    if (e.key === "Enter" && paletteFiles[0]) {
-                        openFile(paletteFiles[0]);
-                        palette = false;
+                    if (e.key === "ArrowDown") {
+                        e.preventDefault();
+                        paletteSel = Math.min(paletteTotal - 1, paletteSel + 1);
+                    } else if (e.key === "ArrowUp") {
+                        e.preventDefault();
+                        paletteSel = Math.max(0, paletteSel - 1);
+                    } else if (e.key === "Enter") {
+                        let idx = paletteSel;
+                        if (idx < paletteFiles.length && paletteFiles[idx]) {
+                            openFile(paletteFiles[idx]);
+                            palette = false;
+                        } else {
+                            idx -= paletteFiles.length;
+                            const projHits = projectsSnap.filter((m) =>
+                                m.name.toLowerCase().includes(paletteCmdQ),
+                            );
+                            if (idx < projHits.length) {
+                                doSwitchProject(projHits[idx].id);
+                                palette = false;
+                            } else {
+                                idx -= projHits.length;
+                                const cmd = allCommands[idx];
+                                if (cmd) {
+                                    cmd.run();
+                                    palette = false;
+                                }
+                            }
+                        }
                     }
                 }}
             />
             <div class="opts">
-                {#each paletteFiles as p}<button
+                {#if !paletteIsCmd}
+                    <div class="pgroup">files · {paletteFiles.length}</div>
+                {/if}
+                {#each paletteFiles as p, i}<button
                         type="button"
                         class="opt"
+                        class:on={paletteSel === i}
+                        onmouseenter={() => (paletteSel = i)}
                         onclick={() => {
                             openFile(p);
                             palette = false;
                         }}
                         ><FileIcon name={basename(p)} />
-                        {p}<small>file</small></button
+                        {p}<small>file · Enter</small></button
                     >{/each}
+                <div class="pgroup">projects</div>
                 {#each projectsSnap.filter((m) => m.name
                         .toLowerCase()
-                        .includes(paletteQ.toLowerCase())) as m}<button
+                        .includes(paletteCmdQ)) as m, j}<button
                         type="button"
                         class="opt"
+                        class:on={paletteSel === paletteFiles.length + j}
+                        onmouseenter={() =>
+                            (paletteSel = paletteFiles.length + j)}
                         onclick={() => {
                             doSwitchProject(m.id);
                             palette = false;
                         }}
-                        ><Icon name="files" />
+                        ><Icon name="files" size={15} />
                         {m.name}<small
                             >project{m.id === activeProjectIdSnap
                                 ? " · active"
                                 : ""}</small
                         ></button
                     >{/each}
-                <button
-                    type="button"
-                    class="opt"
-                    onclick={() => {
-                        openNewProjectDialog();
-                        palette = false;
-                    }}
-                    ><Icon name="new-folder" /> New project...<small>cmd</small
-                    ></button
+                <div class="pgroup">commands · prefix with &gt;</div>
+                {#each allCommands as c, k}<button
+                        type="button"
+                        class="opt"
+                        class:on={paletteSel ===
+                            paletteFiles.length +
+                                projectsSnap.filter((m) =>
+                                    m.name.toLowerCase().includes(paletteCmdQ),
+                                ).length +
+                                k}
+                        onmouseenter={() =>
+                            (paletteSel =
+                                paletteFiles.length +
+                                projectsSnap.filter((m) =>
+                                    m.name.toLowerCase().includes(paletteCmdQ),
+                                ).length +
+                                k)}
+                        onclick={() => runPaletteCommand(c.id)}
+                        ><Icon name="record-keys" size={15} />
+                        {c.label}<small>cmd</small></button
+                    >{/each}
+            </div>
+            <div class="pfoot">
+                <span>↑↓ navigate</span><span>↵ select</span><span
+                    >esc close</span
                 >
-                <button
-                    type="button"
-                    class="opt"
-                    onclick={() => {
-                        showPreview = !showPreview;
-                        palette = false;
+            </div>
+        </div>
+    </div>
+{/if}
+
+{#if langPick}
+    <div
+        class="palette-veil"
+        role="button"
+        tabindex="0"
+        aria-label="Close language picker"
+        onclick={() => (langPick = false)}
+        onkeydown={(e) => {
+            if (e.key === "Escape") langPick = false;
+        }}
+    >
+        <div
+            class="dlg"
+            role="dialog"
+            aria-label="Language mode"
+            tabindex="0"
+            onclick={(e) => e.stopPropagation()}
+            onkeydown={(e) => e.stopPropagation()}
+        >
+            <div class="dlg-title">Select Language Mode</div>
+            <div class="dlg-body">
+                {#each ["html", "css", "javascript", "typescript", "json", "markdown", "xml", "plaintext"] as l}
+                    <button
+                        type="button"
+                        class="opt langrow"
+                        class:on={languageOf(active) === l}
+                        onclick={() => {
+                            toast(`Language: ${l} (detected from extension)`);
+                            langPick = false;
+                        }}
+                        >{l}{languageOf(active) === l
+                            ? " · current"
+                            : ""}</button
+                    >
+                {/each}
+                <div class="dlg-actions">
+                    <button
+                        type="button"
+                        class="btn ghost"
+                        onclick={() => (langPick = false)}>Close</button
+                    >
+                </div>
+            </div>
+        </div>
+    </div>
+{/if}
+
+{#if gotoOpen}
+    <div
+        class="palette-veil"
+        role="button"
+        tabindex="0"
+        aria-label="Close go to line"
+        onclick={() => (gotoOpen = false)}
+        onkeydown={(e) => {
+            if (e.key === "Escape") gotoOpen = false;
+        }}
+    >
+        <div
+            class="dlg"
+            role="dialog"
+            aria-label="Go to line"
+            tabindex="0"
+            onclick={(e) => e.stopPropagation()}
+            onkeydown={(e) => e.stopPropagation()}
+        >
+            <div class="dlg-title">Go to Line/Column</div>
+            <div class="dlg-body">
+                <input
+                    class="dlg-input"
+                    use:autofocus
+                    placeholder="12"
+                    bind:value={gotoDraft}
+                    onkeydown={(e) => {
+                        if (e.key === "Enter") confirmGoto();
                     }}
-                    ><Icon name="browser" /> Toggle preview<small>cmd</small
-                    ></button
-                >
-                <button
-                    type="button"
-                    class="opt"
-                    onclick={() => {
-                        togglePreviewZoom();
-                        palette = false;
-                    }}
-                    ><Icon
-                        name={previewZoomed
-                            ? "fullscreen-exit"
-                            : "fullscreen"}
-                    />
-                    {previewZoomed ? "Exit preview zoom" : "Zoom preview"}<small
-                        >cmd</small
-                    ></button
-                >
-                <button
-                    type="button"
-                    class="opt"
-                    onclick={() => {
-                        previewRef?.openNewTab();
-                        palette = false;
-                    }}
-                    ><Icon name="link-external" /> Open preview in new tab<small
-                        >cmd</small
-                    ></button
-                >
-                <button
-                    type="button"
-                    class="opt"
-                    onclick={() => {
-                        if (confirm("Reset?")) resetWorkspace();
-                        palette = false;
-                    }}
-                    ><Icon name="refresh" /> Reset project files<small
-                        >cmd</small
-                    ></button
-                >
+                />
+                <div class="dlg-actions">
+                    <button
+                        type="button"
+                        class="btn ghost"
+                        onclick={() => (gotoOpen = false)}>Cancel</button
+                    >
+                    <button type="button" class="btn" onclick={confirmGoto}
+                        >Go</button
+                    >
+                </div>
             </div>
         </div>
     </div>
@@ -1041,3 +2473,17 @@
         </div>
     </div>
 {/if}
+
+<div class="toasts" aria-live="polite">
+    {#each toasts as t}
+        <div class="toast {t.kind}">
+            <span>{t.text}</span>
+            <button
+                class="iconbtn"
+                aria-label="Dismiss"
+                onclick={() => (toasts = toasts.filter((x) => x.id !== t.id))}
+                ><Icon name="close" size={13} /></button
+            >
+        </div>
+    {/each}
+</div>

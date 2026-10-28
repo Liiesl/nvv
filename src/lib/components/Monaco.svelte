@@ -12,6 +12,9 @@
         onCursor,
         inspectTarget = null,
         onInspectClear,
+        fontSize = 13,
+        minimapOn = true,
+        revealLine = 0,
     }: {
         path: string;
         content: string;
@@ -19,6 +22,9 @@
         onCursor?: (line: number, col: number) => void;
         inspectTarget?: InspectPayload | null;
         onInspectClear?: () => void;
+        fontSize?: number;
+        minimapOn?: boolean;
+        revealLine?: number;
     } = $props();
 
     let host: HTMLDivElement | null = null;
@@ -60,10 +66,7 @@
         }
     }
 
-    function findInspectIndex(
-        text: string,
-        target: InspectPayload,
-    ): number {
+    function findInspectIndex(text: string, target: InspectPayload): number {
         // Strict matching only. A weak fallback (e.g. first `<div>`) would
         // highlight the wrong line in unrelated files and look "stuck".
         // Return -1 to clear instead of guessing.
@@ -80,7 +83,10 @@
             return -1;
         }
         if (target.classes.length) {
-            const cls = target.classes[0].replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            const cls = target.classes[0].replace(
+                /[.*+?^${}()|[\]\\]/g,
+                "\\$&",
+            );
             try {
                 const re = new RegExp(
                     `<${target.tag}[^>]*class=["'][^"']*${cls}`,
@@ -123,12 +129,7 @@
             const endLine = endBefore.split("\n").length;
             const endLastNl = endBefore.lastIndexOf("\n");
             const endCol = endIdx - endLastNl;
-            const range = new monacoInstance.Range(
-                line,
-                col,
-                endLine,
-                endCol,
-            );
+            const range = new monacoInstance.Range(line, col, endLine, endCol);
             decorIds = editor.deltaDecorations(decorIds, [
                 {
                     range,
@@ -213,12 +214,24 @@
                 monacoInstance = monaco;
                 editor = monaco.editor.create(host, {
                     theme: "vs-dark",
-                    fontSize: 13,
-                    minimap: { enabled: false },
+                    fontSize,
+                    minimap: {
+                        enabled: minimapOn,
+                        scale: 1,
+                        renderCharacters: false,
+                        maxColumn: 80,
+                    },
                     automaticLayout: false,
                     scrollBeyondLastLine: false,
                     padding: { top: 10 },
                     renderLineHighlight: "all",
+                    stickyScroll: { enabled: true },
+                    bracketPairColorization: { enabled: true },
+                    guides: { bracketPairs: true, indentation: true },
+                    smoothScrolling: true,
+                    cursorBlinking: "smooth",
+                    renderWhitespace: "selection",
+                    fontLigatures: true,
                 });
                 editor.onDidChangeCursorPosition((e) =>
                     onCursor?.(e.position.lineNumber, e.position.column),
@@ -286,6 +299,32 @@
     $effect(() => {
         if (!ready) return;
         applyInspectTarget(inspectTarget);
+    });
+
+    $effect(() => {
+        if (!ready || !editor) return;
+        void fontSize;
+        void minimapOn;
+        try {
+            editor.updateOptions({
+                fontSize,
+                minimap: { enabled: minimapOn },
+            });
+        } catch {
+            /* noop */
+        }
+    });
+
+    $effect(() => {
+        if (!ready || !editor || !monacoInstance) return;
+        if (!revealLine || revealLine < 1) return;
+        try {
+            editor.revealLineInCenter(revealLine);
+            editor.setPosition({ lineNumber: revealLine, column: 1 });
+            editor.focus();
+        } catch {
+            /* noop */
+        }
     });
 
     onDestroy(() => {

@@ -11,6 +11,7 @@
         onCreateFolder,
         onRename,
         onDelete,
+        collapseNonce = 0,
     }: {
         files: Record<string, VNode>;
         active: string;
@@ -19,6 +20,7 @@
         onCreateFolder: (dir: string, name: string) => void;
         onRename: (oldP: string, newP: string) => void;
         onDelete: (p: string) => void;
+        collapseNonce?: number;
     } = $props();
 
     let expanded = $state<Set<string>>(new Set(["/"]));
@@ -33,6 +35,33 @@
     } | null>(null);
 
     const tree = $derived(buildTree(files));
+
+    $effect(() => {
+        void collapseNonce;
+        if (collapseNonce > 0) expanded = new Set(["/"]);
+    });
+
+    // Keep active file's parents expanded (VS Code reveal behavior).
+    $effect(() => {
+        const a = active;
+        if (!a) return;
+        const parts = a.split("/").filter(Boolean);
+        let acc = "";
+        const next = new Set(expanded);
+        let changed = false;
+        for (let i = 0; i < parts.length - 1; i++) {
+            acc += "/" + parts[i];
+            if (!next.has(acc)) {
+                next.add(acc);
+                changed = true;
+            }
+        }
+        if (!next.has("/")) {
+            next.add("/");
+            changed = true;
+        }
+        if (changed) expanded = next;
+    });
 
     function toggle(p: string) {
         const n = new Set(expanded);

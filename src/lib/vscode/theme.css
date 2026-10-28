@@ -988,3 +988,521 @@ button.veil {
     outline: 1px solid #1f6feb !important;
     outline-offset: -1px;
 }
+
+/* ---- VS Code shell upgrade ---- */
+.titlebar .menu {
+    position: relative;
+    align-items: center;
+}
+.menubtn {
+    background: transparent;
+    border: none;
+    color: var(--vs-fg-dim);
+    cursor: pointer;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+}
+.menubtn:hover,
+.menubtn.on {
+    color: var(--vs-fg);
+    background: var(--vs-hover);
+}
+.titlemenu {
+    position: absolute;
+    top: 30px;
+    left: 90px;
+    z-index: 80;
+    min-width: 250px;
+    background: var(--vs-bg3);
+    border: 1px solid var(--vs-border2);
+    border-radius: 6px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+    padding: 4px;
+}
+.titlemenu button {
+    display: flex;
+    width: 100%;
+    justify-content: space-between;
+    gap: 16px;
+    background: transparent;
+    border: none;
+    color: var(--vs-fg);
+    padding: 7px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+.titlemenu button:hover {
+    background: var(--vs-accent);
+    color: #fff;
+}
+.titlemenu button small {
+    opacity: 0.6;
+}
+.titlemenu .sep {
+    height: 1px;
+    background: var(--vs-border);
+    margin: 4px 6px;
+}
+.cmdcenter {
+    flex: 1;
+    max-width: 520px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--vs-input);
+    border: 1px solid var(--vs-border2);
+    color: var(--vs-fg-dim);
+    border-radius: 6px;
+    padding: 3px 10px;
+    cursor: pointer;
+    min-width: 0;
+}
+.cmdcenter:hover {
+    border-color: var(--vs-accent2);
+    color: var(--vs-fg);
+}
+.cmdcenter .cc-main {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: center;
+}
+.cmdcenter .cc-dot {
+    color: var(--vs-warn);
+    margin-right: 4px;
+}
+.cmdcenter kbd {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--vs-border2);
+    border-radius: 4px;
+    padding: 0 5px;
+    font-size: 11px;
+    font-family: var(--mono);
+}
+.activity {
+    position: relative;
+}
+.activity button {
+    position: relative;
+}
+.activity .badge {
+    position: absolute;
+    right: 6px;
+    bottom: 6px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 8px;
+    background: var(--vs-badge);
+    color: #fff;
+    font-size: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.activity .badge.err {
+    background: #f14c4c;
+}
+.sidebar {
+    position: relative;
+}
+.sash.side {
+    flex: 0 0 3px;
+    cursor: col-resize;
+    background: transparent;
+}
+.sash.side:hover {
+    background: var(--vs-accent2);
+}
+.sidemenu {
+    margin: 0 8px 6px;
+    background: var(--vs-bg3);
+    border: 1px solid var(--vs-border2);
+    border-radius: 6px;
+    padding: 4px;
+}
+.sidemenu button {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: none;
+    color: var(--vs-fg);
+    padding: 6px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+.sidemenu button:hover {
+    background: var(--vs-accent);
+    color: #fff;
+}
+.sec-title.collapsible {
+    width: 100%;
+    background: transparent;
+    border: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    text-align: left;
+}
+.sec-title small {
+    margin-left: auto;
+    opacity: 0.6;
+    font-weight: 400;
+}
+.outline {
+    padding: 0 4px 6px;
+}
+.orow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    background: transparent;
+    border: none;
+    color: var(--vs-fg-dim);
+    padding: 3px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    text-align: left;
+    min-width: 0;
+}
+.orow:hover {
+    background: var(--vs-hover);
+    color: var(--vs-fg);
+}
+.orow .okind {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--vs-accent2);
+    flex: 0 0 34px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.orow .olabel {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.orow .oline {
+    opacity: 0.5;
+    font-size: 11px;
+    font-family: var(--mono);
+}
+.oempty {
+    padding: 4px 14px;
+    color: var(--vs-fg-faint);
+    font-size: 12px;
+}
+.timeline {
+    padding: 0 14px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.timeline .tline {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    color: var(--vs-fg-dim);
+    font-size: 12px;
+}
+.timeline .tline small {
+    font-family: var(--mono);
+    opacity: 0.8;
+}
+.searchbox .smeta {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--vs-fg-dim);
+}
+.sres .sfile {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.sres .sfile em {
+    font-style: normal;
+    opacity: 0.6;
+    font-family: var(--mono);
+}
+.sres.ext {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-items: stretch;
+}
+.tabsbar {
+    display: flex;
+    background: var(--vs-bg2);
+    border-bottom: 1px solid var(--vs-border);
+    flex: 0 0 35px;
+    min-height: 35px;
+}
+.tabsbar .tabs {
+    flex: 1;
+    border-bottom: none;
+}
+.editor-actions {
+    display: flex;
+    align-items: center;
+    padding: 0 6px;
+    gap: 2px;
+}
+.tab .x {
+    opacity: 0;
+}
+.tab:hover .x,
+.tab.on .x {
+    opacity: 1;
+}
+.tab.dragging {
+    opacity: 0.5;
+    outline: 1px dashed var(--vs-accent2);
+}
+.crumbs .crumb {
+    background: transparent;
+    border: none;
+    color: var(--vs-fg-dim);
+    cursor: pointer;
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 12px;
+}
+.crumbs .crumb:hover {
+    background: var(--vs-hover);
+    color: var(--vs-fg);
+}
+.crumbs .crumb.file {
+    color: var(--vs-fg);
+}
+.crumbs .csep {
+    opacity: 0.5;
+}
+.crumbs .crumb.sym {
+    margin-left: 10px;
+    font-family: var(--mono);
+    font-size: 11px;
+    opacity: 0.8;
+}
+.crumbs .crumb-right {
+    margin-left: auto;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+.welcome {
+    margin: auto;
+    display: flex;
+    gap: 36px;
+    padding: 30px;
+    color: var(--vs-fg-dim);
+    max-width: 760px;
+}
+.welcome .wcol {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.welcome h2 {
+    color: var(--vs-fg);
+    font-weight: 400;
+    font-size: 15px;
+    margin: 0 0 6px;
+}
+.welcome button {
+    background: transparent;
+    border: none;
+    color: var(--vs-accent2);
+    cursor: pointer;
+    text-align: left;
+    padding: 3px 0;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+.welcome button:hover {
+    text-decoration: underline;
+}
+.welcome button small {
+    opacity: 0.6;
+}
+.welcome kbd {
+    background: var(--vs-input);
+    padding: 1px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--vs-border2);
+    font-family: var(--mono);
+    font-size: 11px;
+}
+.psash {
+    flex: 0 0 4px;
+    cursor: row-resize;
+    background: transparent;
+}
+.psash:hover {
+    background: var(--vs-accent2);
+}
+.panelfilter {
+    background: var(--vs-input);
+    border: 1px solid transparent;
+    color: #fff;
+    padding: 3px 8px;
+    border-radius: 3px;
+    outline: none;
+    width: 140px;
+    font-size: 12px;
+}
+.panelfilter:focus {
+    border-color: var(--vs-accent2);
+}
+.paneltabs button {
+    gap: 5px;
+}
+.logline.clickable {
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: none;
+    font: inherit;
+    cursor: pointer;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+.logline.clickable:hover {
+    background: var(--vs-hover);
+}
+.logline .ltime {
+    opacity: 0.55;
+    font-size: 10px;
+    text-transform: uppercase;
+    min-width: 36px;
+    display: inline-block;
+}
+.logline.cmd {
+    color: #fff;
+}
+.logline.ok {
+    color: var(--vs-ok);
+}
+.term {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.termin {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding-top: 4px;
+}
+.termin .prompt {
+    color: var(--vs-ok);
+    white-space: nowrap;
+}
+.termin input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #fff;
+    font: inherit;
+}
+.statusbar button.it {
+    text-transform: none;
+    letter-spacing: normal;
+}
+.ide.has-error .statusbar {
+    background: #a1260d;
+}
+.toasts {
+    position: fixed;
+    right: 14px;
+    bottom: 34px;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-width: min(360px, 90vw);
+}
+.toast {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--vs-bg3);
+    border: 1px solid var(--vs-border2);
+    border-left: 3px solid var(--vs-accent2);
+    border-radius: 6px;
+    padding: 8px 10px;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+    animation: toastin 0.18s ease-out;
+}
+.toast.warn {
+    border-left-color: var(--vs-warn);
+}
+.toast.error {
+    border-left-color: var(--vs-error);
+}
+@keyframes toastin {
+    from {
+        transform: translateY(6px);
+        opacity: 0;
+    }
+    to {
+        transform: none;
+        opacity: 1;
+    }
+}
+.palette .pgroup {
+    padding: 6px 12px 2px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--vs-fg-dim);
+}
+.palette .pfoot {
+    display: flex;
+    gap: 12px;
+    padding: 6px 12px;
+    border-top: 1px solid var(--vs-border);
+    color: var(--vs-fg-faint);
+    font-size: 11px;
+}
+.opt.langrow {
+    display: flex;
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: none;
+    color: var(--vs-fg);
+    padding: 8px 12px;
+    cursor: pointer;
+    font-family: var(--mono);
+}
+.opt.langrow:hover,
+.opt.langrow.on {
+    background: var(--vs-accent);
+    color: #fff;
+}
+.searchbox input[type="range"] {
+    accent-color: var(--vs-accent);
+}
+@media (max-width: 1100px) {
+    .cmdcenter kbd {
+        display: none;
+    }
+    .cmdcenter {
+        max-width: 300px;
+    }
+    .titlebar .menu {
+        display: none;
+    }
+}
