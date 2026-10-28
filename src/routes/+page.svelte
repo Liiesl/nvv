@@ -130,7 +130,7 @@
 
 <svelte:head>
 	<title>Neverview v2 — VSCode-like HTML preview</title>
-	<meta name="description" content="Client-side VSCode-like HTML preview with CDN Monaco and virtual file system." />
+	<meta name="description" content="Client-side VSCode-like HTML preview with local Monaco and virtual file system." />
 </svelte:head>
 
 {#if browser}
@@ -138,7 +138,7 @@
 	<div class="titlebar">
 		<div class="dots"><span style="background:#ff5f57"></span><span style="background:#febc2e"></span><span style="background:#28c840"></span></div>
 		<div class="menu"><span>File</span><span>Edit</span><span>View</span><span>Run</span><span>Help</span></div>
-		<div class="ttl">Neverview v2 — {active || 'no file'} — CDN Monaco + virtual FS</div>
+		<div class="ttl">Neverview v2 — {active || 'no file'} — Monaco + virtual FS</div>
 		<div class="actions">
 			<button class="btn small ghost" onclick={() => { previewRef?.refresh(); }}><Icon name="play" size={14} /> Run</button>
 			<button class="btn small" onclick={() => previewRef?.openNewTab()}><Icon name="link-external" size={14} /> Open preview</button>
@@ -266,7 +266,7 @@
 		<span class="right">
 			<span class="it">{active ? languageOf(active) : '--'}</span>
 			<span class="it">Ln {line}, Col {col}</span>
-			<span class="it">CDN monaco {`0.52.2`}</span>
+			<span class="it">monaco 0.57.0</span>
 			<span class="it"><Icon name="check" size={14} /> CF worker</span>
 		</span>
 	</div>

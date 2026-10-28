@@ -133,7 +133,7 @@ btn?.addEventListener('click', () => {
 		path: '/README.md',
 		type: 'file',
 		mtime: Date.now(),
-		content: `# Neverview v2\n\nClient-side VSCode-like HTML preview.\n\n- Files live in memory + localStorage\n- Monaco is loaded from CDN\n- Preview resolves relative imports via blob URLs\n`
+		content: `# Neverview v2\n\nClient-side VSCode-like HTML preview.\n\n- Files live in memory + localStorage\n- Monaco is bundled from the monaco-editor npm package\n- Preview resolves relative imports via blob URLs\n`
 	}
 ];
 

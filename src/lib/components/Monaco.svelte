@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import { loadMonaco } from '#lib/monaco.js';
+	import type * as monacoNs from 'monaco-editor';
+	import { loadMonaco, type MonacoApi } from '#lib/monaco.js';
 	import { languageOf } from '#lib/vfs.js';
 
 	let { path = '', content = '', onChange, onCursor }: {
@@ -11,32 +12,26 @@
 	} = $props();
 
 	let host: HTMLDivElement | null = null;
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	let editor: any = null;
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	let monacoInstance: any = null;
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	let model: any = null;
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	let contentSub: any = null;
+	let editor: monacoNs.editor.IStandaloneCodeEditor | null = null;
+	let monacoInstance: MonacoApi | null = null;
+	let model: monacoNs.editor.ITextModel | null = null;
+	let contentSub: monacoNs.IDisposable | null = null;
 	let failed = $state('');
 	let ready = $state(false);
 	let currentPath = '';
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	const viewStates = new Map<string, any>();
+	const viewStates = new Map<string, monacoNs.editor.ICodeEditorViewState | null>();
 	let ro: ResizeObserver | null = null;
 
 	function setModel(p: string, value: string) {
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const m = monacoInstance as any;
+		const m = monacoInstance;
 		if (!m || !editor) return;
 		if (currentPath) {
 			try {
-				const vs = editor.saveViewState?.();
+				const vs = editor.saveViewState();
 				if (vs) viewStates.set(currentPath, vs);
 			} catch { /* noop */ }
 		}
-		try { contentSub?.dispose?.(); } catch { /* noop */ }
+		try { contentSub?.dispose(); } catch { /* noop */ }
 		contentSub = null;
 		if (model) {
 			try { model.dispose(); } catch { /* noop */ }
@@ -47,15 +42,16 @@
 			const existing = m.editor.getModel(uri);
 			if (existing) existing.dispose();
 		} catch { /* noop */ }
-		model = m.editor.createModel(value ?? '', languageOf(p), uri);
-		contentSub = model.onDidChangeContent(() => {
-			try { onChange(model.getValue()); } catch { /* noop */ }
+		const next = m.editor.createModel(value ?? '', languageOf(p), uri);
+		contentSub = next.onDidChangeContent(() => {
+			try { onChange(next.getValue()); } catch { /* noop */ }
 		});
-		editor.setModel(model);
+		model = next;
+		editor.setModel(next);
 		currentPath = p;
 		try {
 			const vs = viewStates.get(p);
-			if (vs) editor.restoreViewState?.(vs);
+			if (vs) editor.restoreViewState(vs);
 		} catch { /* noop */ }
 	}
 
@@ -63,7 +59,7 @@
 		let dead = false;
 		(async () => {
 			try {
-				const monaco = (await loadMonaco()) as any;
+				const monaco = await loadMonaco();
 				if (dead || !host) return;
 				monacoInstance = monaco;
 				editor = monaco.editor.create(host, {
@@ -75,15 +71,16 @@
 					padding: { top: 10 },
 					renderLineHighlight: 'all'
 				});
-				editor.onDidChangeCursorPosition((e: { position: { lineNumber: number; column: number } }) =>
+				editor.onDidChangeCursorPosition((e) =>
 					onCursor?.(e.position.lineNumber, e.position.column)
 				);
 				setModel(path, content);
-				ro = new ResizeObserver(() => { try { editor?.layout?.(); } catch { /* noop */ } });
+				const ed = editor;
+				ro = new ResizeObserver(() => { try { ed.layout(); } catch { /* noop */ } });
 				if (host) ro.observe(host);
 				ready = true;
 			} catch {
-				failed = 'Monaco CDN failed to load. Check network.';
+				failed = 'Monaco failed to load. Check console.';
 			}
 		})();
 		return () => {
@@ -96,20 +93,24 @@
 		if (!ready) return;
 		const p = path;
 		const v = content;
-		if (!editor || !monacoInstance) return;
+		const ed = editor;
+		if (!ed || !monacoInstance) return;
 		if (p !== currentPath) {
 			setModel(p, v);
-		} else if (model && model.getValue() !== v) {
-			try {
-				model.pushEditOperations([], [{ range: model.getFullModelRange(), text: v ?? '' }], () => null);
-			} catch { /* noop */ }
+		} else {
+			const cur = model;
+			if (cur && cur.getValue() !== v) {
+				try {
+					cur.pushEditOperations([], [{ range: cur.getFullModelRange(), text: v ?? '' }], () => null);
+				} catch { /* noop */ }
+			}
 		}
 	});
 
 	onDestroy(() => {
-		try { contentSub?.dispose?.(); } catch { /* noop */ }
-		try { model?.dispose?.(); } catch { /* noop */ }
-		try { editor?.dispose?.(); } catch { /* noop */ }
+		try { contentSub?.dispose(); } catch { /* noop */ }
+		try { model?.dispose(); } catch { /* noop */ }
+		try { editor?.dispose(); } catch { /* noop */ }
 		try { ro?.disconnect(); } catch { /* noop */ }
 	});
 </script>
