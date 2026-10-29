@@ -10,6 +10,8 @@
 	let startPos = $state(0);
 	let startSizes = $state<number[]>([]);
 	let containerEl: HTMLElement | null = $state(null);
+	let rafId = 0;
+	let rafSizes: { splitId: string; next: number[] } | null = null;
 
 	function sashDown(e: PointerEvent, idx: number, splitId: string, dir: "row" | "col") {
 		if (e.pointerType === "mouse" && e.button !== 0) return;
@@ -18,7 +20,9 @@
 		dragIdx = idx;
 		startSizes = [...split.sizes];
 		startPos = dir === "row" ? e.clientX : e.clientY;
+		rafSizes = null;
 		ide.splitDrag = true;
+		ide.splitDragDir = dir;
 		ide.setBodyDragCursor(dir === "row" ? "col" : "row");
 		(e.currentTarget as HTMLElement)?.setPointerCapture?.(e.pointerId);
 		e.preventDefault();
@@ -39,13 +43,33 @@
 		if (a < 15 || b < 15 || a > 85 || b > 85) return;
 		next[dragIdx] = a;
 		next[dragIdx + 1] = b;
-		ide.setSplitSizes(splitId, next);
+		// One commit per frame: keeps resize responsive without
+		// flooding $state updates (which previously remounted editors).
+		rafSizes = { splitId, next };
+		if (!rafId) {
+			rafId = requestAnimationFrame(() => {
+				rafId = 0;
+				const pending = rafSizes;
+				rafSizes = null;
+				if (pending) ide.setSplitSizes(pending.splitId, pending.next);
+			});
+		}
 	}
 
 	function sashUp(e: PointerEvent) {
 		if (dragIdx === null) return;
 		dragIdx = null;
+		if (rafId) {
+			cancelAnimationFrame(rafId);
+			rafId = 0;
+		}
+		// Flush the last pending size so the sash lands where released.
+		if (rafSizes) {
+			ide.setSplitSizes(rafSizes.splitId, rafSizes.next);
+			rafSizes = null;
+		}
 		ide.splitDrag = false;
+		ide.splitDragDir = null;
 		ide.setBodyDragCursor("");
 		try {
 			(e.currentTarget as HTMLElement)?.releasePointerCapture?.(e.pointerId);

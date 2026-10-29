@@ -10,13 +10,16 @@
 			<EditorGroupView groupId={ide.maximizedGroupId} />
 		</div>
 	{:else}
-		{#key ide.layoutRoot}
-			<SplitView node={ide.layoutRoot} />
-		{/key}
+		<SplitView node={ide.layoutRoot} />
 	{/if}
 </div>
-{#if ide.splitDrag}
-	<div class="dragveil" aria-hidden="true"></div>
+{#if ide.splitDrag || ide.sideDragging || ide.panelDragging}
+	<div
+		class="dragveil"
+		class:row={ide.splitDragDir === "row"}
+		class:col={ide.splitDragDir === "col"}
+		aria-hidden="true"
+	></div>
 {/if}
 
 <style>
@@ -31,5 +34,18 @@
 		display: flex;
 		min-width: 0;
 		min-height: 0;
+	}
+	.dragveil {
+		position: fixed;
+		inset: 0;
+		z-index: 40;
+		background: transparent;
+		cursor: grabbing;
+	}
+	.dragveil.row {
+		cursor: col-resize;
+	}
+	.dragveil.col {
+		cursor: row-resize;
 	}
 </style>

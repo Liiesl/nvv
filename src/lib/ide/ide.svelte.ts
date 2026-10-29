@@ -123,6 +123,7 @@ export class IdeState {
 	activeGroupId = $state<string>("g1");
 	maximizedGroupId = $state<string | null>(null);
 	splitDrag = $state(false);
+	splitDragDir = $state<"row" | "col" | null>(null);
 	dropHover = $state<{ groupId: string; area: "tabs" | "body"; index: number | null } | null>(null);
 	titleMenu = $state<string | null>(null);
 	titleMenuPos = $state<{ x: number; y: number } | null>(null);
@@ -1427,14 +1428,15 @@ export class IdeState {
 		if (a < 15 || b < 15 || a > 85 || b > 85) return;
 		target.sizes[index] = a;
 		target.sizes[index + 1] = b;
-		this.layoutRoot = { ...this.layoutRoot };
+		// Mutating target.sizes in place is reactive ($state deep tracking).
+		// Do NOT replace layoutRoot here — that remounts every editor/iframe.
 	}
 
 	setSplitSizes(splitId: string, sizes: number[]) {
 		const target = this.findSplitById(splitId);
 		if (!target || sizes.length !== target.children.length) return;
 		target.sizes = [...sizes];
-		this.layoutRoot = { ...this.layoutRoot };
+		// Same: in-place update only, no root clone (see above).
 	}
 
 	findSplitById(splitId: string): Extract<SplitNode, { type: "split" }> | null {
